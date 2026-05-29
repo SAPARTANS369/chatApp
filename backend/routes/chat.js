@@ -228,48 +228,40 @@ router.post('/conversations/:id/messages', async (req, res) => {
             }
         }
 
-        const connection = await pool.getConnection();
-        await connection.beginTransaction();
-        try {
-            const [result] = await connection.query(
-                'INSERT INTO messages (conversation_id, sender_id, message_type, content, reply_to_message_id) VALUES (?, ?, ?, ?, ?)',
-                [req.params.id, req.user.userId, 'text', content, reply_to_message_id || null]
-            );
-            const messageId = result.insertId;
+        // Insert the message
+        const [result] = await pool.query(
+            'INSERT INTO messages (conversation_id, sender_id, message_type, content, reply_to_message_id) VALUES (?, ?, ?, ?, ?)',
+            [req.params.id, req.user.userId, 'text', content, reply_to_message_id || null]
+        );
+        const messageId = result.insertId;
+        await pool.query('UPDATE conversations SET updated_at = NOW() WHERE conversation_id = ?', [req.params.id]);
 
-            if (encrypted_keys && Object.keys(encrypted_keys).length > 0) {
+        // Store E2EE keys — non-fatal, never blocks message delivery
+        if (encrypted_keys && Object.keys(encrypted_keys).length > 0) {
+            try {
                 const keyValues = Object.entries(encrypted_keys).map(([userId, encKey]) => [messageId, parseInt(userId), encKey]);
-                await connection.query(
-                    'INSERT INTO message_keys (message_id, user_id, encrypted_key) VALUES ?',
-                    [keyValues]
-                );
+                await pool.query('INSERT INTO message_keys (message_id, user_id, encrypted_key) VALUES ?', [keyValues]);
+            } catch (keyErr) {
+                console.warn('Could not store message_keys (non-fatal):', keyErr.message);
             }
-
-            await connection.query('UPDATE conversations SET updated_at = NOW() WHERE conversation_id = ?', [req.params.id]);
-
-            const [message] = await connection.query(`
-                SELECT m.*, u.username, u.display_name,
-                       rm.content AS reply_content, rm.message_type AS reply_type,
-                       ru.display_name AS reply_display_name,
-                       mk.encrypted_key,
-                       sender.ecdh_public_key AS sender_ecdh_public_key
-                FROM messages m
-                JOIN users u ON m.sender_id = u.user_id
-                LEFT JOIN messages rm ON m.reply_to_message_id = rm.message_id
-                LEFT JOIN users ru ON rm.sender_id = ru.user_id
-                LEFT JOIN message_keys mk ON m.message_id = mk.message_id AND mk.user_id = ?
-                LEFT JOIN users sender ON m.sender_id = sender.user_id
-                WHERE m.message_id = ?
-            `, [req.user.userId, messageId]);
-
-            await connection.commit();
-            res.status(201).json(message[0]);
-        } catch (err) {
-            await connection.rollback();
-            throw err;
-        } finally {
-            connection.release();
         }
+
+        const [message] = await pool.query(`
+            SELECT m.*, u.username, u.display_name,
+                   rm.content AS reply_content, rm.message_type AS reply_type,
+                   ru.display_name AS reply_display_name,
+                   mk.encrypted_key,
+                   sender.ecdh_public_key AS sender_ecdh_public_key
+            FROM messages m
+            JOIN users u ON m.sender_id = u.user_id
+            LEFT JOIN messages rm ON m.reply_to_message_id = rm.message_id
+            LEFT JOIN users ru ON rm.sender_id = ru.user_id
+            LEFT JOIN message_keys mk ON m.message_id = mk.message_id AND mk.user_id = ?
+            LEFT JOIN users sender ON m.sender_id = sender.user_id
+            WHERE m.message_id = ?
+        `, [req.user.userId, messageId]);
+
+        res.status(201).json(message[0]);
     } catch (error) {
         console.error(error);
         res.status(500).json({ error: 'Server error' });
@@ -281,7 +273,14 @@ router.post('/conversations/:id/upload', upload.single('file'), async (req, res)
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
-        const ext = path.extname(req.file.originalname).toLowerCase();
+        // For encrypted files (.enc), look at the real extension before .enc
+        let originalName = req.file.originalname;
+        let ext = path.extname(originalName).toLowerCase();
+        if (ext === '.enc') {
+            const nameWithoutEnc = originalName.slice(0, -4);
+            ext = path.extname(nameWithoutEnc).toLowerCase();
+        }
+
         const audioExts = ['.mp3', '.ogg', '.wav', '.m4a'];
         const voiceExts = ['.webm'];
         const imageExts = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
@@ -290,9 +289,10 @@ router.post('/conversations/:id/upload', upload.single('file'), async (req, res)
         else if (voiceExts.includes(ext)) messageType = 'voice';
         else if (audioExts.includes(ext)) messageType = 'audio';
 
+        // All encrypted files go as 'raw' to Cloudinary — safe for any type
         let resourceType = 'raw';
-        if (messageType === 'image') resourceType = 'image';
-        else if (messageType === 'audio' || messageType === 'voice') resourceType = 'video';
+        if (messageType === 'image' && !req.file.originalname.endsWith('.enc')) resourceType = 'image';
+        else if ((messageType === 'audio' || messageType === 'voice') && !req.file.originalname.endsWith('.enc')) resourceType = 'video';
 
         // Upload to Cloudinary
         const uploadResult = await cloudinary.uploader.upload(req.file.path, {
@@ -308,60 +308,52 @@ router.post('/conversations/:id/upload', upload.single('file'), async (req, res)
         const fileUrl = uploadResult.secure_url;
         const { reply_to_message_id, encrypted_keys } = req.body;
 
-        const connection = await pool.getConnection();
-        await connection.beginTransaction();
-        try {
-            const [result] = await connection.query(
-                'INSERT INTO messages (conversation_id, sender_id, message_type, file_url, reply_to_message_id) VALUES (?, ?, ?, ?, ?)',
-                [req.params.id, req.user.userId, messageType, fileUrl, reply_to_message_id || null]
-            );
-            const messageId = result.insertId;
+        // Insert message — core operation
+        const [result] = await pool.query(
+            'INSERT INTO messages (conversation_id, sender_id, message_type, file_url, reply_to_message_id) VALUES (?, ?, ?, ?, ?)',
+            [req.params.id, req.user.userId, messageType, fileUrl, reply_to_message_id || null]
+        );
+        const messageId = result.insertId;
+        await pool.query('UPDATE conversations SET updated_at = NOW() WHERE conversation_id = ?', [req.params.id]);
 
-            if (encrypted_keys) {
+        // Store E2EE keys — non-fatal, never blocks message delivery
+        if (encrypted_keys) {
+            try {
                 let parsedKeys = encrypted_keys;
                 if (typeof encrypted_keys === 'string') {
                     try { parsedKeys = JSON.parse(encrypted_keys); } catch {}
                 }
                 if (parsedKeys && Object.keys(parsedKeys).length > 0) {
                     const keyValues = Object.entries(parsedKeys).map(([userId, encKey]) => [messageId, parseInt(userId), encKey]);
-                    await connection.query(
-                        'INSERT INTO message_keys (message_id, user_id, encrypted_key) VALUES ?',
-                        [keyValues]
-                    );
+                    await pool.query('INSERT INTO message_keys (message_id, user_id, encrypted_key) VALUES ?', [keyValues]);
                 }
+            } catch (keyErr) {
+                console.warn('Could not store message_keys (non-fatal):', keyErr.message);
             }
-
-            await connection.query('UPDATE conversations SET updated_at = NOW() WHERE conversation_id = ?', [req.params.id]);
-
-            const [message] = await connection.query(`
-                SELECT m.*, u.username, u.display_name,
-                       rm.content AS reply_content, rm.message_type AS reply_type,
-                       ru.display_name AS reply_display_name,
-                       mk.encrypted_key,
-                       sender.ecdh_public_key AS sender_ecdh_public_key
-                FROM messages m
-                JOIN users u ON m.sender_id = u.user_id
-                LEFT JOIN messages rm ON m.reply_to_message_id = rm.message_id
-                LEFT JOIN users ru ON rm.sender_id = ru.user_id
-                LEFT JOIN message_keys mk ON m.message_id = mk.message_id AND mk.user_id = ?
-                LEFT JOIN users sender ON m.sender_id = sender.user_id
-                WHERE m.message_id = ?
-            `, [req.user.userId, messageId]);
-
-            await connection.commit();
-            res.status(201).json(message[0]);
-        } catch (err) {
-            await connection.rollback();
-            throw err;
-        } finally {
-            connection.release();
         }
+
+        const [message] = await pool.query(`
+            SELECT m.*, u.username, u.display_name,
+                   rm.content AS reply_content, rm.message_type AS reply_type,
+                   ru.display_name AS reply_display_name,
+                   mk.encrypted_key,
+                   sender.ecdh_public_key AS sender_ecdh_public_key
+            FROM messages m
+            JOIN users u ON m.sender_id = u.user_id
+            LEFT JOIN messages rm ON m.reply_to_message_id = rm.message_id
+            LEFT JOIN users ru ON rm.sender_id = ru.user_id
+            LEFT JOIN message_keys mk ON m.message_id = mk.message_id AND mk.user_id = ?
+            LEFT JOIN users sender ON m.sender_id = sender.user_id
+            WHERE m.message_id = ?
+        `, [req.user.userId, messageId]);
+
+        res.status(201).json(message[0]);
     } catch (error) {
-        console.error(error);
+        console.error('Upload error:', error);
         if (req.file && req.file.path && fs.existsSync(req.file.path)) {
             try { fs.unlinkSync(req.file.path); } catch {}
         }
-        res.status(500).json({ error: 'Upload failed' });
+        res.status(500).json({ error: 'Upload failed', detail: error.message });
     }
 });
 
