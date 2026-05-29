@@ -37,7 +37,7 @@ const upload = multer({
     storage,
     limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
     fileFilter: (req, file, cb) => {
-        const allowed = /jpeg|jpg|png|gif|webp|mp3|ogg|wav|m4a|webm|mp4|pdf|txt/;
+        const allowed = /jpeg|jpg|png|gif|webp|mp3|ogg|wav|m4a|webm|mp4|pdf|txt|enc/;
         const ext = path.extname(file.originalname).toLowerCase().replace('.', '');
         if (allowed.test(ext)) cb(null, true);
         else cb(new Error('File type not allowed'));
