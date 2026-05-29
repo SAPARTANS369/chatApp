@@ -403,7 +403,8 @@ const Chat = () => {
         };
 
         const myPrivateKey = user.ecdhPrivateKey;
-        const canEncrypt = myPrivateKey && activeChatKeys.length > 0 && activeChatKeys.every(k => k.ecdh_public_key);
+        const eligibleKeys = activeChatKeys.filter(k => k.ecdh_public_key);
+        const canEncrypt = myPrivateKey && eligibleKeys.length > 0;
 
         if (canEncrypt) {
             try {
@@ -413,7 +414,7 @@ const Chat = () => {
                 const { ciphertext, iv, rawAesKey } = await encryptData(textBuffer);
                 
                 const encryptedKeys = {};
-                for (const member of activeChatKeys) {
+                for (const member of eligibleKeys) {
                     const sharedKEK = await deriveECDHSharedKey(myPrivateKey, member.ecdh_public_key);
                     const encAesKey = await encryptAESKeyWithECDH(rawAesKey, sharedKEK);
                     encryptedKeys[member.user_id] = encAesKey;
@@ -482,14 +483,15 @@ const Chat = () => {
         await uploadFile(file);
     };
 
-        const uploadFile = async (file) => {
+    const uploadFile = async (file) => {
         setUploading(true);
         try {
             let finalFile = file;
             let encryptedKeysString = null;
             
             const myPrivateKey = user.ecdhPrivateKey;
-            const canEncrypt = myPrivateKey && activeChatKeys.length > 0 && activeChatKeys.every(k => k.ecdh_public_key);
+            const eligibleKeys = activeChatKeys.filter(k => k.ecdh_public_key);
+            const canEncrypt = myPrivateKey && eligibleKeys.length > 0;
 
             if (canEncrypt) {
                 try {
@@ -503,7 +505,7 @@ const Chat = () => {
                     const { ciphertext, iv, rawAesKey } = await encryptData(fileDataBuffer);
                     
                     const encryptedKeys = {};
-                    for (const member of activeChatKeys) {
+                    for (const member of eligibleKeys) {
                         const sharedKEK = await deriveECDHSharedKey(myPrivateKey, member.ecdh_public_key);
                         const encAesKey = await encryptAESKeyWithECDH(rawAesKey, sharedKEK);
                         encryptedKeys[member.user_id] = encAesKey;
