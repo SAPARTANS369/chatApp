@@ -171,7 +171,7 @@ router.post('/conversations/:id/members', async (req, res) => {
     }
 });
 
-// Get messages (with replied-to message data)
+// Get messages (with replied-to message data and E2EE keys)
 router.get('/conversations/:id/messages', async (req, res) => {
     try {
         const [parts] = await pool.query('SELECT * FROM conversation_members WHERE conversation_id = ? AND user_id = ?', [req.params.id, req.user.userId]);
@@ -181,23 +181,42 @@ router.get('/conversations/:id/messages', async (req, res) => {
             SELECT m.*, u.username, u.display_name,
                    rm.content AS reply_content,
                    rm.message_type AS reply_type,
-                   ru.display_name AS reply_display_name
+                   ru.display_name AS reply_display_name,
+                   mk.encrypted_key,
+                   sender.ecdh_public_key AS sender_ecdh_public_key
             FROM messages m
             JOIN users u ON m.sender_id = u.user_id
             LEFT JOIN messages rm ON m.reply_to_message_id = rm.message_id
             LEFT JOIN users ru ON rm.sender_id = ru.user_id
+            LEFT JOIN message_keys mk ON m.message_id = mk.message_id AND mk.user_id = ?
+            LEFT JOIN users sender ON m.sender_id = sender.user_id
             WHERE m.conversation_id = ?
             ORDER BY m.created_at ASC
-        `, [req.params.id]);
+        `, [req.user.userId, req.params.id]);
         res.json(messages);
     } catch (error) {
         res.status(500).json({ error: 'Server error' });
     }
 });
 
-// Send text message (with optional reply)
+// Get public keys of all members in a conversation
+router.get('/conversations/:id/keys', async (req, res) => {
+    try {
+        const [keys] = await pool.query(`
+            SELECT u.user_id, u.username, u.ecdh_public_key 
+            FROM conversation_members cm
+            JOIN users u ON cm.user_id = u.user_id
+            WHERE cm.conversation_id = ?
+        `, [req.params.id]);
+        res.json(keys);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Send text message (with optional reply and E2EE keys)
 router.post('/conversations/:id/messages', async (req, res) => {
-    const { content, reply_to_message_id } = req.body;
+    const { content, reply_to_message_id, encrypted_keys } = req.body;
     try {
         const [conv] = await pool.query('SELECT conversation_type FROM conversations WHERE conversation_id = ?', [req.params.id]);
         if (conv[0].conversation_type === 'private') {
@@ -209,29 +228,55 @@ router.post('/conversations/:id/messages', async (req, res) => {
             }
         }
 
-        const [result] = await pool.query(
-            'INSERT INTO messages (conversation_id, sender_id, message_type, content, reply_to_message_id) VALUES (?, ?, ?, ?, ?)',
-            [req.params.id, req.user.userId, 'text', content, reply_to_message_id || null]
-        );
-        await pool.query('UPDATE conversations SET updated_at = NOW() WHERE conversation_id = ?', [req.params.id]);
+        const connection = await pool.getConnection();
+        await connection.beginTransaction();
+        try {
+            const [result] = await connection.query(
+                'INSERT INTO messages (conversation_id, sender_id, message_type, content, reply_to_message_id) VALUES (?, ?, ?, ?, ?)',
+                [req.params.id, req.user.userId, 'text', content, reply_to_message_id || null]
+            );
+            const messageId = result.insertId;
 
-        const [message] = await pool.query(`
-            SELECT m.*, u.username, u.display_name,
-                   rm.content AS reply_content, rm.message_type AS reply_type,
-                   ru.display_name AS reply_display_name
-            FROM messages m
-            JOIN users u ON m.sender_id = u.user_id
-            LEFT JOIN messages rm ON m.reply_to_message_id = rm.message_id
-            LEFT JOIN users ru ON rm.sender_id = ru.user_id
-            WHERE m.message_id = ?
-        `, [result.insertId]);
-        res.status(201).json(message[0]);
+            if (encrypted_keys && Object.keys(encrypted_keys).length > 0) {
+                const keyValues = Object.entries(encrypted_keys).map(([userId, encKey]) => [messageId, parseInt(userId), encKey]);
+                await connection.query(
+                    'INSERT INTO message_keys (message_id, user_id, encrypted_key) VALUES ?',
+                    [keyValues]
+                );
+            }
+
+            await connection.query('UPDATE conversations SET updated_at = NOW() WHERE conversation_id = ?', [req.params.id]);
+
+            const [message] = await connection.query(`
+                SELECT m.*, u.username, u.display_name,
+                       rm.content AS reply_content, rm.message_type AS reply_type,
+                       ru.display_name AS reply_display_name,
+                       mk.encrypted_key,
+                       sender.ecdh_public_key AS sender_ecdh_public_key
+                FROM messages m
+                JOIN users u ON m.sender_id = u.user_id
+                LEFT JOIN messages rm ON m.reply_to_message_id = rm.message_id
+                LEFT JOIN users ru ON rm.sender_id = ru.user_id
+                LEFT JOIN message_keys mk ON m.message_id = mk.message_id AND mk.user_id = ?
+                LEFT JOIN users sender ON m.sender_id = sender.user_id
+                WHERE m.message_id = ?
+            `, [req.user.userId, messageId]);
+
+            await connection.commit();
+            res.status(201).json(message[0]);
+        } catch (err) {
+            await connection.rollback();
+            throw err;
+        } finally {
+            connection.release();
+        }
     } catch (error) {
+        console.error(error);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
-// Upload file/image/audio message
+// Upload file/image/audio message (with optional reply and E2EE keys)
 router.post('/conversations/:id/upload', upload.single('file'), async (req, res) => {
     try {
         if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -261,26 +306,56 @@ router.post('/conversations/:id/upload', upload.single('file'), async (req, res)
         }
 
         const fileUrl = uploadResult.secure_url;
-        const { reply_to_message_id } = req.body;
+        const { reply_to_message_id, encrypted_keys } = req.body;
 
-        const [result] = await pool.query(
-            'INSERT INTO messages (conversation_id, sender_id, message_type, file_url, reply_to_message_id) VALUES (?, ?, ?, ?, ?)',
-            [req.params.id, req.user.userId, messageType, fileUrl, reply_to_message_id || null]
-        );
-        await pool.query('UPDATE conversations SET updated_at = NOW() WHERE conversation_id = ?', [req.params.id]);
+        const connection = await pool.getConnection();
+        await connection.beginTransaction();
+        try {
+            const [result] = await connection.query(
+                'INSERT INTO messages (conversation_id, sender_id, message_type, file_url, reply_to_message_id) VALUES (?, ?, ?, ?, ?)',
+                [req.params.id, req.user.userId, messageType, fileUrl, reply_to_message_id || null]
+            );
+            const messageId = result.insertId;
 
-        const [message] = await pool.query(`
-            SELECT m.*, u.username, u.display_name,
-                   rm.content AS reply_content, rm.message_type AS reply_type,
-                   ru.display_name AS reply_display_name
-            FROM messages m
-            JOIN users u ON m.sender_id = u.user_id
-            LEFT JOIN messages rm ON m.reply_to_message_id = rm.message_id
-            LEFT JOIN users ru ON rm.sender_id = ru.user_id
-            WHERE m.message_id = ?
-        `, [result.insertId]);
+            if (encrypted_keys) {
+                let parsedKeys = encrypted_keys;
+                if (typeof encrypted_keys === 'string') {
+                    try { parsedKeys = JSON.parse(encrypted_keys); } catch {}
+                }
+                if (parsedKeys && Object.keys(parsedKeys).length > 0) {
+                    const keyValues = Object.entries(parsedKeys).map(([userId, encKey]) => [messageId, parseInt(userId), encKey]);
+                    await connection.query(
+                        'INSERT INTO message_keys (message_id, user_id, encrypted_key) VALUES ?',
+                        [keyValues]
+                    );
+                }
+            }
 
-        res.status(201).json(message[0]);
+            await connection.query('UPDATE conversations SET updated_at = NOW() WHERE conversation_id = ?', [req.params.id]);
+
+            const [message] = await connection.query(`
+                SELECT m.*, u.username, u.display_name,
+                       rm.content AS reply_content, rm.message_type AS reply_type,
+                       ru.display_name AS reply_display_name,
+                       mk.encrypted_key,
+                       sender.ecdh_public_key AS sender_ecdh_public_key
+                FROM messages m
+                JOIN users u ON m.sender_id = u.user_id
+                LEFT JOIN messages rm ON m.reply_to_message_id = rm.message_id
+                LEFT JOIN users ru ON rm.sender_id = ru.user_id
+                LEFT JOIN message_keys mk ON m.message_id = mk.message_id AND mk.user_id = ?
+                LEFT JOIN users sender ON m.sender_id = sender.user_id
+                WHERE m.message_id = ?
+            `, [req.user.userId, messageId]);
+
+            await connection.commit();
+            res.status(201).json(message[0]);
+        } catch (err) {
+            await connection.rollback();
+            throw err;
+        } finally {
+            connection.release();
+        }
     } catch (error) {
         console.error(error);
         if (req.file && req.file.path && fs.existsSync(req.file.path)) {

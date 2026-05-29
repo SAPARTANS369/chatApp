@@ -17,6 +17,8 @@ CREATE TABLE users (
     bio VARCHAR(255) DEFAULT NULL,
     status ENUM('offline', 'online', 'away', 'busy') NOT NULL DEFAULT 'offline',
     last_seen_at DATETIME DEFAULT NULL,
+    ecdh_public_key TEXT DEFAULT NULL,
+    encrypted_private_key TEXT DEFAULT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
@@ -140,3 +142,22 @@ LEFT JOIN messages m
         FROM messages m2
         WHERE m2.conversation_id = c.conversation_id
     );
+
+-- =========================
+-- MESSAGE KEYS (E2EE)
+-- =========================
+CREATE TABLE IF NOT EXISTS message_keys (
+    message_id BIGINT UNSIGNED NOT NULL,
+    user_id INT UNSIGNED NOT NULL,
+    encrypted_key TEXT NOT NULL,
+    
+    PRIMARY KEY (message_id, user_id),
+    
+    CONSTRAINT fk_mk_message
+        FOREIGN KEY (message_id) REFERENCES messages(message_id)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+        
+    CONSTRAINT fk_mk_user
+        FOREIGN KEY (user_id) REFERENCES users(user_id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB;

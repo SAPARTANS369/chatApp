@@ -6,6 +6,15 @@ import { useToast } from '../components/Toast';
 import UserProfileModal from '../components/UserProfileModal';
 import { useTheme } from '../context/ThemeContext';
 import VoiceRecorder from '../components/VoiceRecorder';
+import { 
+    deriveECDHSharedKey, 
+    encryptData, 
+    decryptData, 
+    encryptAESKeyWithECDH, 
+    decryptAESKeyWithECDH,
+    base64ToArrayBuffer,
+    arrayBufferToBase64
+} from '../utils/cryptoUtils';
 
 const BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
@@ -38,6 +47,128 @@ const Avatar = ({ user, size = 48, onClick }) => {
     );
 };
 
+// Dynamic E2EE Encrypted Media Component
+const EncryptedMedia = ({ msg, myPrivateKey, type }) => {
+    const [mediaUrl, setMediaUrl] = useState('');
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(false);
+
+    useEffect(() => {
+        let isMounted = true;
+        const fetchAndDecrypt = async () => {
+            if (!myPrivateKey || !msg.encrypted_key || !msg.sender_ecdh_public_key) {
+                setLoading(false);
+                setError(true);
+                return;
+            }
+            try {
+                const sharedKEK = await deriveECDHSharedKey(myPrivateKey, msg.sender_ecdh_public_key);
+                const rawAesKey = await decryptAESKeyWithECDH(msg.encrypted_key, sharedKEK);
+
+                const res = await axios.get(getFullUrl(msg.file_url), { responseType: 'arraybuffer' });
+                const combinedBuffer = new Uint8Array(res.data);
+
+                const iv = combinedBuffer.slice(0, 12);
+                const ciphertext = combinedBuffer.slice(12);
+
+                const decryptedBuffer = await decryptData(ciphertext, rawAesKey, iv);
+
+                let mimeType = 'application/octet-stream';
+                if (type === 'image') mimeType = 'image/png';
+                else if (type === 'audio' || type === 'voice') mimeType = 'audio/webm';
+
+                const blob = new Blob([decryptedBuffer], { type: mimeType });
+                const objectUrl = URL.createObjectURL(blob);
+
+                if (isMounted) {
+                    setMediaUrl(objectUrl);
+                    setLoading(false);
+                }
+            } catch (err) {
+                console.error('Failed to decrypt media file:', err);
+                if (isMounted) {
+                    setError(true);
+                    setLoading(false);
+                }
+            }
+        };
+
+        fetchAndDecrypt();
+
+        return () => {
+            isMounted = false;
+            if (mediaUrl) URL.revokeObjectURL(mediaUrl);
+        };
+    }, [msg, myPrivateKey, type]);
+
+    if (loading) return <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>🔑 [DECRYPTING_SECURE_MEDIA...]</div>;
+    if (error) return <div style={{ color: 'var(--danger)', fontSize: '0.78rem' }}>⚠️ [DECRYPTION_FAILED]</div>;
+
+    if (type === 'image') {
+        return (
+            <img
+                src={mediaUrl}
+                alt="img"
+                style={{ maxWidth: '250px', maxHeight: '250px', border: 'var(--border-style)', borderRadius: 'var(--border-radius)', display: 'block', transition: 'transform 0.15s' }}
+            />
+        );
+    } else if (type === 'audio' || type === 'voice') {
+        return <audio controls src={mediaUrl} style={{ filter: 'invert(1) hue-rotate(90deg)', maxWidth: '250px', display: 'block' }} />;
+    } else {
+        return (
+            <a href={mediaUrl} download={msg.file_url?.split('/').pop()?.replace('.enc', '')} style={{ color: 'var(--primary)' }}>
+                📄 [DOWNLOAD_SECURE_FILE] {msg.file_url?.split('/').pop()?.replace('.enc', '')}
+            </a>
+        );
+    }
+};
+
+// Decrypt message helper
+const decryptMessageList = async (messageList, myPrivateKey) => {
+    if (!myPrivateKey) return messageList;
+
+    const decryptedList = [];
+    for (const msg of messageList) {
+        if (msg.content?.startsWith('__E2EE__:') && msg.encrypted_key && msg.sender_ecdh_public_key) {
+            try {
+                const sharedKEK = await deriveECDHSharedKey(myPrivateKey, msg.sender_ecdh_public_key);
+                const rawAesKey = await decryptAESKeyWithECDH(msg.encrypted_key, sharedKEK);
+                
+                const parts = msg.content.split(':');
+                const iv = base64ToArrayBuffer(parts[1]);
+                const ciphertext = base64ToArrayBuffer(parts[2]);
+                
+                const decryptedBuffer = await decryptData(ciphertext, rawAesKey, iv);
+                const dec = new TextDecoder();
+                const plaintext = dec.decode(decryptedBuffer);
+                
+                decryptedList.push({
+                    ...msg,
+                    content: plaintext,
+                    is_decrypted: true
+                });
+                continue;
+            } catch (e) {
+                console.error('Failed to decrypt message:', msg.message_id, e);
+                decryptedList.push({
+                    ...msg,
+                    content: '[Failed to decrypt secure message]',
+                    is_decrypted: false
+                });
+                continue;
+            }
+        } else if (msg.file_url && msg.file_url.endsWith('.enc') && msg.encrypted_key && msg.sender_ecdh_public_key) {
+            decryptedList.push({
+                ...msg,
+                is_encrypted_file: true
+            });
+            continue;
+        }
+        decryptedList.push(msg);
+    }
+    return decryptedList;
+};
+
 const Chat = () => {
     const { user, token, logout } = useContext(AuthContext);
     const { addToast, ToastContainer } = useToast();
@@ -48,6 +179,7 @@ const Chat = () => {
     const [blockedIds, setBlockedIds] = useState([]);
     const [conversations, setConversations] = useState([]);
     const [activeChat, setActiveChat] = useState(null);
+    const [activeChatKeys, setActiveChatKeys] = useState([]);
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [editingMsgId, setEditingMsgId] = useState(null);
@@ -96,10 +228,11 @@ const Chat = () => {
     useEffect(() => {
         socketRef.current = io(BASE_URL, { auth: { token } });
 
-        socketRef.current.on('receive_message', (msg) => {
+        socketRef.current.on('receive_message', async (msg) => {
             if (msg.sender_id !== user.id) {
                 if (activeChatRef.current?.conversation_id === msg.conversation_id) {
-                    setMessages(prev => [...prev, msg]);
+                    const decrypted = await decryptMessageList([msg], user.ecdhPrivateKey);
+                    setMessages(prev => [...prev, ...decrypted]);
                     api.put(`/chat/conversations/${msg.conversation_id}/read`);
                 }
             }
@@ -183,10 +316,14 @@ const Chat = () => {
         } catch {}
     };
     const fetchMessages = async (convId) => {
-        try { const r = await api.get(`/chat/conversations/${convId}/messages`); setMessages(r.data); } catch {}
+        try { 
+            const r = await api.get(`/chat/conversations/${convId}/messages`); 
+            const decrypted = await decryptMessageList(r.data, user.ecdhPrivateKey);
+            setMessages(decrypted); 
+        } catch {}
     };
-
-    const openChat = (conv) => {
+ 
+    const openChat = async (conv) => {
         handleTypingStop();
         setActiveChat(conv);
         setActiveView('chat');
@@ -195,6 +332,13 @@ const Chat = () => {
         fetchMessages(conv.conversation_id);
         socketRef.current.emit('join_room', conv.conversation_id);
         api.put(`/chat/conversations/${conv.conversation_id}/read`).then(fetchConversations);
+        
+        try {
+            const r = await api.get(`/chat/conversations/${conv.conversation_id}/keys`);
+            setActiveChatKeys(r.data);
+        } catch (e) {
+            console.error('Failed to fetch conversation member keys:', e);
+        }
     };
 
     const startConversation = async (otherUserId) => {
@@ -253,12 +397,45 @@ const Chat = () => {
             return;
         }
 
+        let payload = {
+            content: newMessage,
+            reply_to_message_id: replyTo?.message_id || null
+        };
+
+        const myPrivateKey = user.ecdhPrivateKey;
+        const canEncrypt = myPrivateKey && activeChatKeys.length > 0 && activeChatKeys.every(k => k.ecdh_public_key);
+
+        if (canEncrypt) {
+            try {
+                const enc = new TextEncoder();
+                const textBuffer = enc.encode(newMessage);
+                
+                const { ciphertext, iv, rawAesKey } = await encryptData(textBuffer);
+                
+                const encryptedKeys = {};
+                for (const member of activeChatKeys) {
+                    const sharedKEK = await deriveECDHSharedKey(myPrivateKey, member.ecdh_public_key);
+                    const encAesKey = await encryptAESKeyWithECDH(rawAesKey, sharedKEK);
+                    encryptedKeys[member.user_id] = encAesKey;
+                }
+                
+                const ciphertextBase64 = arrayBufferToBase64(ciphertext);
+                const ivBase64 = arrayBufferToBase64(iv);
+                
+                payload = {
+                    content: `__E2EE__:${ivBase64}:${ciphertextBase64}`,
+                    reply_to_message_id: replyTo?.message_id || null,
+                    encrypted_keys: encryptedKeys
+                };
+            } catch (err) {
+                console.error('Encryption failed, sending plaintext:', err);
+            }
+        }
+
         try {
-            const r = await api.post(`/chat/conversations/${activeChat.conversation_id}/messages`, {
-                content: newMessage,
-                reply_to_message_id: replyTo?.message_id || null
-            });
-            setMessages(prev => [...prev, r.data]);
+            const r = await api.post(`/chat/conversations/${activeChat.conversation_id}/messages`, payload);
+            const decrypted = await decryptMessageList([r.data], user.ecdhPrivateKey);
+            setMessages(prev => [...prev, ...decrypted]);
             socketRef.current.emit('send_message', r.data);
             setNewMessage('');
             setReplyTo(null);
@@ -305,19 +482,57 @@ const Chat = () => {
         await uploadFile(file);
     };
 
-    const uploadFile = async (file) => {
-        const formData = new FormData();
-        formData.append('file', file);
-        if (replyTo?.message_id) formData.append('reply_to_message_id', replyTo.message_id);
-
+        const uploadFile = async (file) => {
         setUploading(true);
         try {
+            let finalFile = file;
+            let encryptedKeysString = null;
+            
+            const myPrivateKey = user.ecdhPrivateKey;
+            const canEncrypt = myPrivateKey && activeChatKeys.length > 0 && activeChatKeys.every(k => k.ecdh_public_key);
+
+            if (canEncrypt) {
+                try {
+                    const fileReader = new FileReader();
+                    const fileDataBuffer = await new Promise((resolve, reject) => {
+                        fileReader.onload = () => resolve(fileReader.result);
+                        fileReader.onerror = reject;
+                        fileReader.readAsArrayBuffer(file);
+                    });
+
+                    const { ciphertext, iv, rawAesKey } = await encryptData(fileDataBuffer);
+                    
+                    const encryptedKeys = {};
+                    for (const member of activeChatKeys) {
+                        const sharedKEK = await deriveECDHSharedKey(myPrivateKey, member.ecdh_public_key);
+                        const encAesKey = await encryptAESKeyWithECDH(rawAesKey, sharedKEK);
+                        encryptedKeys[member.user_id] = encAesKey;
+                    }
+                    
+                    const combined = new Uint8Array(12 + ciphertext.byteLength);
+                    combined.set(iv, 0);
+                    combined.set(new Uint8Array(ciphertext), 12);
+                    
+                    const encryptedBlob = new Blob([combined], { type: 'application/octet-stream' });
+                    finalFile = new File([encryptedBlob], `${file.name}.enc`, { type: 'application/octet-stream' });
+                    encryptedKeysString = JSON.stringify(encryptedKeys);
+                } catch (err) {
+                    console.error('File encryption failed, sending plaintext:', err);
+                }
+            }
+
+            const formData = new FormData();
+            formData.append('file', finalFile);
+            if (replyTo?.message_id) formData.append('reply_to_message_id', replyTo.message_id);
+            if (encryptedKeysString) formData.append('encrypted_keys', encryptedKeysString);
+
             const r = await axios.post(
                 `${BASE_URL}/api/chat/conversations/${activeChat.conversation_id}/upload`,
                 formData,
                 { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'multipart/form-data' } }
             );
-            setMessages(prev => [...prev, r.data]);
+            const decrypted = await decryptMessageList([r.data], user.ecdhPrivateKey);
+            setMessages(prev => [...prev, ...decrypted]);
             socketRef.current.emit('send_message', r.data);
             setReplyTo(null);
             fetchConversations();
@@ -421,12 +636,14 @@ const Chat = () => {
                 {/* Message content */}
                 {msg.is_deleted ? (
                     <div style={{ color: 'var(--danger)', opacity: 0.6, fontStyle: 'italic' }}>[DELETED]</div>
+                ) : msg.is_encrypted_file ? (
+                    <EncryptedMedia msg={msg} myPrivateKey={user.ecdhPrivateKey} type={msgType} />
                 ) : msgType === 'image' ? (
                     <img
                         src={getFullUrl(msg.file_url)}
                         alt="img"
                         onClick={() => setLightboxImage(getFullUrl(msg.file_url))}
-                        style={{ maxWidth: '250px', maxHeight: '250px', border: 'var(--border-style)', borderRadius: 'var(--border-radius)', display: 'block', cursor: 'pointer', transition: 'transform 0.15s' }}
+                        style={{ maxWidth: '250px', maxHeight: '250px', border: 'var(--border-style)', borderRadius: 'var(--border-radius)', display: 'block', pointerEvents: 'auto', cursor: 'pointer', transition: 'transform 0.15s' }}
                     />
                 ) : (msgType === 'audio' || msgType === 'voice') ? (
                     <audio controls src={getFullUrl(msg.file_url)} style={{ filter: 'invert(1) hue-rotate(90deg)', maxWidth: '250px', display: 'block' }} />

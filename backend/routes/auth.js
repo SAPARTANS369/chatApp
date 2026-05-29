@@ -5,13 +5,13 @@ const jwt = require('jsonwebtoken');
 const pool = require('../db');
 
 router.post('/register', async (req, res) => {
-    const { username, email, password, display_name } = req.body;
+    const { username, email, password, display_name, ecdh_public_key, encrypted_private_key } = req.body;
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
         
         const [result] = await pool.query(
-            'INSERT INTO users (username, email, password_hash, display_name) VALUES (?, ?, ?, ?)',
-            [username, email, hashedPassword, display_name || username]
+            'INSERT INTO users (username, email, password_hash, display_name, ecdh_public_key, encrypted_private_key) VALUES (?, ?, ?, ?, ?, ?)',
+            [username, email, hashedPassword, display_name || username, ecdh_public_key || null, encrypted_private_key || null]
         );
         
         res.status(201).json({ message: 'User registered successfully', userId: result.insertId });
@@ -48,7 +48,8 @@ router.post('/login', async (req, res) => {
                 id: user.user_id,
                 username: user.username,
                 displayName: user.display_name,
-                avatar: user.avatar_url
+                avatar: user.avatar_url,
+                encryptedPrivateKey: user.encrypted_private_key
             }
         });
     } catch (error) {
