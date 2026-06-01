@@ -246,7 +246,7 @@ const Chat = () => {
             if (msg.sender_id !== userRef.current.id) {
                 if (activeChatRef.current?.conversation_id === msg.conversation_id) {
                     const socketMsg = { ...msg };
-                    console.log('[DEBUG] msg.encrypted_keys:', msg.encrypted_keys, 'user.id:', userRef.current.id, 'String(user.id):', String(userRef.current.id));
+                    console.log('[DEBUG] msg.encrypted_keys:', msg.encrypted_keys, 'userRef.current:', userRef.current);
                     // encrypted_keys object keys are always strings — coerce user.id to match
                     const myKey = msg.encrypted_keys && (
                         msg.encrypted_keys[userRef.current.id] ||
