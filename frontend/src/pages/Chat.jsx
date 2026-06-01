@@ -221,6 +221,10 @@ const Chat = () => {
     const avatarInputRef = useRef(null);
     const activeChatRef = useRef(activeChat);
     activeChatRef.current = activeChat;
+    const userRef = useRef(user);
+    userRef.current = user;
+    const searchQueryRef = useRef(searchQuery);
+    searchQueryRef.current = searchQuery;
 
     const api = axios.create({
         baseURL: `${BASE_URL}/api`,
@@ -239,20 +243,20 @@ const Chat = () => {
 
         socketRef.current.on('receive_message', async (msg) => {
             console.log('[DEBUG] socket receive_message triggered:', msg);
-            if (msg.sender_id !== user.id) {
+            if (msg.sender_id !== userRef.current.id) {
                 if (activeChatRef.current?.conversation_id === msg.conversation_id) {
                     const socketMsg = { ...msg };
-                    console.log('[DEBUG] msg.encrypted_keys:', msg.encrypted_keys, 'user.id:', user.id, 'String(user.id):', String(user.id));
+                    console.log('[DEBUG] msg.encrypted_keys:', msg.encrypted_keys, 'user.id:', userRef.current.id, 'String(user.id):', String(userRef.current.id));
                     // encrypted_keys object keys are always strings — coerce user.id to match
                     const myKey = msg.encrypted_keys && (
-                        msg.encrypted_keys[user.id] ||
-                        msg.encrypted_keys[String(user.id)]
+                        msg.encrypted_keys[userRef.current.id] ||
+                        msg.encrypted_keys[String(userRef.current.id)]
                     );
                     console.log('[DEBUG] Found myKey:', myKey);
                     if (myKey) {
                         socketMsg.encrypted_key = myKey;
                     }
-                    const decrypted = await decryptMessageList([socketMsg], user.ecdhPrivateKey);
+                    const decrypted = await decryptMessageList([socketMsg], userRef.current.ecdhPrivateKey);
                     console.log('[DEBUG] Decrypted socketMsg output:', decrypted[0]);
                     setMessages(prev => [...prev, ...decrypted]);
                     api.put(`/chat/conversations/${msg.conversation_id}/read`);
@@ -275,7 +279,7 @@ const Chat = () => {
 
         socketRef.current.on('user_status_change', () => {
             fetchConversations();
-            performSearch(searchQuery);
+            performSearch(searchQueryRef.current);
         });
 
         // Typing Socket events
