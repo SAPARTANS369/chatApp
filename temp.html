@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>CipherChat&colon; A Real-Time Encrypted Messaging Platform</title>
+            <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only],
+.vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+.vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+            
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+<style>
+:root {
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-severe: #bc4c00;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
+}
+
+</style>
+<style>
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-severe: #db6d28;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
+  }
+}
+
+</style>
+<style>
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid #888;
+}
+
+.markdown-alert>:first-child {
+  margin-top: 0
+}
+
+.markdown-alert>:last-child {
+  margin-bottom: 0
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  margin-right: 0.5rem;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-caution);
+}
+
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-caution);
+}
+
+</style>
+        
+        </head>
+        <body class="vscode-body vscode-light">
+            <span id="markdown-mermaid" aria-hidden="true" data-config="{&quot;darkModeTheme&quot;:&quot;dark&quot;,&quot;lightModeTheme&quot;:&quot;default&quot;,&quot;maxTextSize&quot;:50000,&quot;clickDrag&quot;:&quot;alt&quot;,&quot;showControls&quot;:&quot;onHoverOrFocus&quot;,&quot;resizable&quot;:true,&quot;maxHeight&quot;:&quot;&quot;}"></span>
+				<h1 id="cipherchat-a-real-time-encrypted-messaging-platform">CipherChat: A Real-Time Encrypted Messaging Platform</h1>
+<p><strong>Academic Project Report</strong></p>
+<hr>
+<h3 id="student-information"><strong>Student Information</strong></h3>
+<ul>
+<li><strong>Name:</strong> M.Anas Faheem Khan</li>
+<li><strong>SAP ID:</strong> 70174002</li>
+<li><strong>Project Name:</strong> CipherChat (Secure Messaging System)</li>
+<li><strong>Date:</strong> June 2026</li>
+</ul>
+<hr>
+<h2 id="1-executive-summary">1. Executive Summary</h2>
+<p><strong>CipherChat</strong> is a full-stack, real-time messaging application built with <strong>End-to-End Encryption (E2EE)</strong>, <strong>JWT-based authentication</strong>, and <strong>bcrypt password hashing</strong>. The server acts as a blind relay — it stores only ciphertext and never has access to plaintext messages or private keys.</p>
+<p><strong>Key features:</strong></p>
+<ul>
+<li>Zero-knowledge server: all encryption runs in the browser</li>
+<li>Real-time messaging via <a href="http://Socket.io">Socket.io</a> WebSockets</li>
+<li>ECDH P-256 key agreement + AES-GCM 256-bit encryption</li>
+<li>JWT sessions with bcrypt-hashed passwords</li>
+<li>Cloudinary-hosted encrypted file attachments</li>
+</ul>
+<hr>
+<h2 id="2-working-of-the-project">2. Working of the Project</h2>
+<pre><code>       +-------------------------------------------------------------+
+       |                  CLIENTS (React 19 SPA)                     |
+       |  - All encryption/decryption runs here (Web Crypto API)     |
+       +------------------------------+------------------------------+
+                                      |
+                      HTTP API        |        WebSockets
+                     (Axios)          |        (Socket.io)
+                                      v
+       +-------------------------------------------------------------+
+       |             BACKEND GATEWAY (Node.js &amp; Express)             |
+       |  - JWT Authentication Middleware                            |
+       |  - REST API Routes (auth, chat, users)                      |
+       |  - Attachment Upload Pipeline (Multer + Cloudinary)         |
+       +------------------------------+------------------------------+
+                                      |
+                                      v
+       +-------------------------------------------------------------+
+       |                 DATABASE PERSISTENCE (MySQL)                |
+       |  - Relational InnoDB Schema                                 |
+       |  - FK Constraints &amp; Composite Indexes                       |
+       |  - Stores only ciphertext, never plaintext                  |
+       +-------------------------------------------------------------+
+</code></pre>
+<p><strong>Step-by-step flow:</strong></p>
+<ol>
+<li>User registers → browser generates ECDH keypair, encrypts private key with password, uploads public key + encrypted private key.</li>
+<li>User logs in → server validates bcrypt hash, returns JWT + encrypted private key; browser decrypts private key locally.</li>
+<li>Sending a message → browser encrypts with AES-GCM, backend stores ciphertext, <a href="http://Socket.io">Socket.io</a> broadcasts to recipients.</li>
+<li>Receiving a message → browser uses ECDH key agreement to derive shared secret, decrypts session key, decrypts message.</li>
+<li>File uploads → files are encrypted in-browser before leaving the device, stored as raw blobs on Cloudinary.</li>
+</ol>
+<hr>
+<h3 id="how-it-works--in-simple-terms"><strong>How It Works — In Simple Terms</strong></h3>
+<p><strong>👤 Users &amp; Accounts:</strong>
+When someone signs up, their details (username, email, hashed password, display name) are saved in the <strong><code>users</code> table</strong>. Passwords are never stored as-is — they go through <strong>bcrypt hashing</strong> first, so even if the database leaks, passwords are safe. Each user also gets a cryptographic public key stored here, which is used for secure messaging. On login, the server verifies the password hash and issues a <strong>JWT token</strong> that the user attaches to every future request — no need to log in again on each action.</p>
+<p><strong>💬 Conversations &amp; Members:</strong>
+Every chat — whether between two people or a group — is a row in the <strong><code>conversations</code> table</strong>. The type column tells if it's <code>private</code> or <code>group</code>. Who's in that chat is tracked in the <strong><code>conversation_members</code> table</strong>, which links users to conversations. This is a many-to-many relationship — one user can be in many chats, one chat can have many users. Each member record also tracks their <strong>role</strong> (<code>member</code> or <code>admin</code>) and a pointer to the <strong>last message they've read</strong> — this is how unread message counts are calculated efficiently.</p>
+<p><strong>📨 Messages:</strong>
+Every message sent is stored as a row in the <strong><code>messages</code> table</strong>. It stores what type of message it is (text, image, file, audio, voice), the encrypted content, who sent it, and which conversation it belongs to. Messages support <strong>soft deletion</strong> — when deleted, the row stays in the database but the content is replaced with <code>[DELETED]</code> and a flag is set. This keeps reply threads intact. Messages can also <strong>reply to other messages</strong> via a self-referencing foreign key (<code>reply_to_message_id</code> pointing back to the same table).</p>
+<p><strong>📁 File Attachments:</strong>
+For images, files, and voice notes, the encrypted binary is uploaded to <strong>Cloudinary</strong> (cloud storage). The database only stores the resulting Cloudinary URL in <code>messages.file_url</code>. This keeps the database lean — it stores links, not raw files.</p>
+<p><strong>🔑 Encryption Keys (message_keys table):</strong>
+For secure messaging, each message has a separate encrypted session key stored in the <strong><code>message_keys</code> table</strong> — one row per recipient. This is how the system supports group chats securely: each participant gets their own copy of the key, encrypted specifically for them. The server just stores and delivers these key blobs — it cannot decrypt them.</p>
+<p><strong>🚫 Blocking:</strong>
+If a user blocks someone, a row is added to the <strong><code>user_blocks</code> table</strong> with both user IDs. Before any message or conversation is allowed, the backend checks this table to see if a block exists in either direction.</p>
+<p><strong>⚡ Real-Time Layer:</strong>
+The backend runs a <strong><a href="http://Socket.io">Socket.io</a></strong> WebSocket server alongside the REST API. When a message is saved to the database, the server immediately emits it to the recipient's socket — no polling needed. When a user connects, their <code>status</code> in the <code>users</code> table is set to <code>online</code>; when they disconnect, it's set to <code>offline</code> and <code>last_seen_at</code> is recorded. Typing indicators and read receipts are pure socket events — they don't touch the database at all.</p>
+<p><strong>🗄️ Database Design Highlights:</strong></p>
+<ul>
+<li>All tables use the <strong>InnoDB</strong> engine for foreign key support and ACID transactions.</li>
+<li><strong>Composite indexes</strong> on <code>(conversation_id, created_at)</code> make loading message history fast even with millions of rows.</li>
+<li><strong>Foreign key constraints</strong> with <code>ON DELETE CASCADE</code> automatically clean up orphaned records (e.g., deleting a conversation removes all its messages and member records).</li>
+<li>The conversations list with last-message previews and unread counts is fetched in a <strong>single optimized query</strong> using correlated subqueries — no extra round trips.</li>
+</ul>
+<hr>
+<h2 id="3-all-entities-with-their-attributes-listed">3. All Entities with Their Attributes Listed</h2>
+<h3 id="31-table-users"><strong>3.1 Table: <code>users</code></strong></h3>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Data Type</th>
+<th>Key</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>user_id</code></td>
+<td><code>INT UNSIGNED</code></td>
+<td><strong>PK</strong></td>
+<td>Auto-Inc</td>
+<td>Unique user ID</td>
+</tr>
+<tr>
+<td><code>username</code></td>
+<td><code>VARCHAR(30)</code></td>
+<td><strong>UK</strong></td>
+<td>—</td>
+<td>Unique login handle</td>
+</tr>
+<tr>
+<td><code>email</code></td>
+<td><code>VARCHAR(255)</code></td>
+<td><strong>UK</strong></td>
+<td>—</td>
+<td>Unique email</td>
+</tr>
+<tr>
+<td><code>password_hash</code></td>
+<td><code>VARCHAR(255)</code></td>
+<td>—</td>
+<td>—</td>
+<td>bcrypt-hashed password</td>
+</tr>
+<tr>
+<td><code>display_name</code></td>
+<td><code>VARCHAR(100)</code></td>
+<td>—</td>
+<td>—</td>
+<td>Public name</td>
+</tr>
+<tr>
+<td><code>avatar_url</code></td>
+<td><code>VARCHAR(500)</code></td>
+<td>—</td>
+<td><code>NULL</code></td>
+<td>Cloudinary picture URL</td>
+</tr>
+<tr>
+<td><code>bio</code></td>
+<td><code>VARCHAR(255)</code></td>
+<td>—</td>
+<td><code>NULL</code></td>
+<td>Short bio</td>
+</tr>
+<tr>
+<td><code>status</code></td>
+<td><code>ENUM</code></td>
+<td>—</td>
+<td><code>'offline'</code></td>
+<td><code>offline/online/away/busy</code></td>
+</tr>
+<tr>
+<td><code>last_seen_at</code></td>
+<td><code>DATETIME</code></td>
+<td>—</td>
+<td><code>NULL</code></td>
+<td>Last active timestamp</td>
+</tr>
+<tr>
+<td><code>ecdh_public_key</code></td>
+<td><code>TEXT</code></td>
+<td>—</td>
+<td><code>NULL</code></td>
+<td>ECDH public key (shared openly)</td>
+</tr>
+<tr>
+<td><code>encrypted_private_key</code></td>
+<td><code>TEXT</code></td>
+<td>—</td>
+<td><code>NULL</code></td>
+<td>ECDH private key encrypted by user's password</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td><code>TIMESTAMP</code></td>
+<td>—</td>
+<td><code>NOW()</code></td>
+<td>Account creation time</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td><code>TIMESTAMP</code></td>
+<td>—</td>
+<td>Auto</td>
+<td>Last modification time</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-table-conversations"><strong>3.2 Table: <code>conversations</code></strong></h3>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Data Type</th>
+<th>Key</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>conversation_id</code></td>
+<td><code>INT UNSIGNED</code></td>
+<td><strong>PK</strong></td>
+<td>Auto-Inc</td>
+<td>Unique chat ID</td>
+</tr>
+<tr>
+<td><code>conversation_type</code></td>
+<td><code>ENUM</code></td>
+<td>Index</td>
+<td>—</td>
+<td><code>'private'</code> or <code>'group'</code></td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td><code>VARCHAR(100)</code></td>
+<td>—</td>
+<td><code>NULL</code></td>
+<td>Group name (NULL for private)</td>
+</tr>
+<tr>
+<td><code>created_by</code></td>
+<td><code>INT UNSIGNED</code></td>
+<td><strong>FK</strong></td>
+<td>—</td>
+<td>References <code>users.user_id</code></td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td><code>TIMESTAMP</code></td>
+<td>—</td>
+<td><code>NOW()</code></td>
+<td>When conversation started</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td><code>TIMESTAMP</code></td>
+<td>—</td>
+<td>Auto</td>
+<td>Last activity time</td>
+</tr>
+</tbody>
+</table>
+<h3 id="33-table-conversation_members"><strong>3.3 Table: <code>conversation_members</code></strong></h3>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Data Type</th>
+<th>Key</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>conversation_id</code></td>
+<td><code>INT UNSIGNED</code></td>
+<td><strong>PK,FK</strong></td>
+<td>—</td>
+<td>References <code>conversations</code></td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td><code>INT UNSIGNED</code></td>
+<td><strong>PK,FK</strong></td>
+<td>—</td>
+<td>References <code>users</code></td>
+</tr>
+<tr>
+<td><code>member_role</code></td>
+<td><code>ENUM</code></td>
+<td>—</td>
+<td><code>'member'</code></td>
+<td><code>'member'</code> or <code>'admin'</code></td>
+</tr>
+<tr>
+<td><code>joined_at</code></td>
+<td><code>TIMESTAMP</code></td>
+<td>—</td>
+<td><code>NOW()</code></td>
+<td>Join time</td>
+</tr>
+<tr>
+<td><code>muted_until</code></td>
+<td><code>DATETIME</code></td>
+<td>—</td>
+<td><code>NULL</code></td>
+<td>Mute expiry</td>
+</tr>
+<tr>
+<td><code>last_read_message_id</code></td>
+<td><code>BIGINT UNSIGNED</code></td>
+<td><strong>FK</strong></td>
+<td><code>NULL</code></td>
+<td>Last read message pointer</td>
+</tr>
+</tbody>
+</table>
+<h3 id="34-table-messages"><strong>3.4 Table: <code>messages</code></strong></h3>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Data Type</th>
+<th>Key</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>message_id</code></td>
+<td><code>BIGINT UNSIGNED</code></td>
+<td><strong>PK</strong></td>
+<td>Auto-Inc</td>
+<td>Unique message ID</td>
+</tr>
+<tr>
+<td><code>conversation_id</code></td>
+<td><code>INT UNSIGNED</code></td>
+<td><strong>FK</strong></td>
+<td>—</td>
+<td>References <code>conversations</code></td>
+</tr>
+<tr>
+<td><code>sender_id</code></td>
+<td><code>INT UNSIGNED</code></td>
+<td><strong>FK</strong></td>
+<td>—</td>
+<td>References <code>users</code></td>
+</tr>
+<tr>
+<td><code>message_type</code></td>
+<td><code>ENUM</code></td>
+<td>—</td>
+<td><code>'text'</code></td>
+<td><code>text/image/file/system/audio/voice</code></td>
+</tr>
+<tr>
+<td><code>content</code></td>
+<td><code>TEXT</code></td>
+<td>—</td>
+<td><code>NULL</code></td>
+<td>AES-GCM encrypted ciphertext (Base64)</td>
+</tr>
+<tr>
+<td><code>file_url</code></td>
+<td><code>VARCHAR(500)</code></td>
+<td>—</td>
+<td><code>NULL</code></td>
+<td>Cloudinary URL for attachments</td>
+</tr>
+<tr>
+<td><code>reply_to_message_id</code></td>
+<td><code>BIGINT UNSIGNED</code></td>
+<td><strong>FK</strong></td>
+<td><code>NULL</code></td>
+<td>Self-reference for threads</td>
+</tr>
+<tr>
+<td><code>is_deleted</code></td>
+<td><code>BOOLEAN</code></td>
+<td>—</td>
+<td><code>FALSE</code></td>
+<td>Soft delete flag</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td><code>TIMESTAMP</code></td>
+<td>—</td>
+<td><code>NOW()</code></td>
+<td>Send time</td>
+</tr>
+<tr>
+<td><code>updated_at</code></td>
+<td><code>TIMESTAMP</code></td>
+<td>—</td>
+<td>Auto</td>
+<td>Edit time</td>
+</tr>
+</tbody>
+</table>
+<h3 id="35-table-message_keys"><strong>3.5 Table: <code>message_keys</code></strong></h3>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Data Type</th>
+<th>Key</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>message_id</code></td>
+<td><code>BIGINT UNSIGNED</code></td>
+<td><strong>PK,FK</strong></td>
+<td>—</td>
+<td>References <code>messages</code></td>
+</tr>
+<tr>
+<td><code>user_id</code></td>
+<td><code>INT UNSIGNED</code></td>
+<td><strong>PK,FK</strong></td>
+<td>—</td>
+<td>References <code>users</code> (recipient)</td>
+</tr>
+<tr>
+<td><code>encrypted_key</code></td>
+<td><code>TEXT</code></td>
+<td>—</td>
+<td>—</td>
+<td>Session AES key encrypted with ECDH KEK</td>
+</tr>
+</tbody>
+</table>
+<h3 id="36-table-user_blocks"><strong>3.6 Table: <code>user_blocks</code></strong></h3>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Data Type</th>
+<th>Key</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>blocker_id</code></td>
+<td><code>INT UNSIGNED</code></td>
+<td><strong>PK,FK</strong></td>
+<td>—</td>
+<td>User who blocked</td>
+</tr>
+<tr>
+<td><code>blocked_id</code></td>
+<td><code>INT UNSIGNED</code></td>
+<td><strong>PK,FK</strong></td>
+<td>—</td>
+<td>User who is blocked</td>
+</tr>
+<tr>
+<td><code>created_at</code></td>
+<td><code>TIMESTAMP</code></td>
+<td>—</td>
+<td><code>NOW()</code></td>
+<td>When block was placed</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="4-entity-relationship-diagram-erd">4. Entity Relationship Diagram (ERD)</h2>
+<pre class="mermaid" style="all: unset;">erDiagram
+    USERS {
+        int    user_id PK
+        varchar username
+        varchar email
+        varchar password_hash
+        varchar display_name
+        varchar avatar_url
+        varchar bio
+        enum    status
+        datetime last_seen_at
+        text    ecdh_public_key
+        text    encrypted_private_key
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    CONVERSATIONS {
+        int   conversation_id PK
+        enum  conversation_type
+        varchar name
+        int   created_by FK
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    CONVERSATION_MEMBERS {
+        int   conversation_id PK
+        int   user_id PK
+        enum  member_role
+        timestamp joined_at
+        datetime  muted_until
+        bigint last_read_message_id FK
+    }
+
+    MESSAGES {
+        bigint  message_id PK
+        int     conversation_id FK
+        int     sender_id FK
+        enum    message_type
+        text    content
+        varchar file_url
+        bigint  reply_to_message_id FK
+        boolean is_deleted
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    MESSAGE_KEYS {
+        bigint message_id PK
+        int    user_id PK
+        text   encrypted_key
+    }
+
+    USER_BLOCKS {
+        int   blocker_id PK
+        int   blocked_id PK
+        timestamp created_at
+    }
+
+    USERS ||--o{ CONVERSATIONS : "creates"
+    USERS ||--o{ MESSAGES : "sends"
+    USERS ||--o{ CONVERSATION_MEMBERS : "joins"
+    USERS ||--o{ MESSAGE_KEYS : "holds key"
+    USERS ||--o{ USER_BLOCKS : "blocks as blocker"
+    USERS ||--o{ USER_BLOCKS : "blocked as target"
+    CONVERSATIONS ||--o{ CONVERSATION_MEMBERS : "has members"
+    CONVERSATIONS ||--o{ MESSAGES : "contains"
+    MESSAGES ||--o{ MESSAGE_KEYS : "has encrypted key"
+    MESSAGES |o--o| MESSAGES : "replies to"</pre>
+<hr>
+<h2 id="5-enhanced-entity-relationship-diagram-eerd">5. Enhanced Entity Relationship Diagram (EERD)</h2>
+<p>The EERD models <strong>specialization</strong> — where a supertype entity branches into subtypes with their own unique attributes.</p>
+<table>
+<thead>
+<tr>
+<th>Supertype</th>
+<th>Subtypes</th>
+<th>Constraint</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CONVERSATIONS</code></td>
+<td><code>PRIVATE_CONVERSATIONS</code>, <code>GROUP_CONVERSATIONS</code></td>
+<td>Disjoint (either private OR group)</td>
+</tr>
+<tr>
+<td><code>MESSAGES</code></td>
+<td><code>TEXT_MESSAGES</code>, <code>ATTACHMENT_MESSAGES</code>, <code>SYSTEM_MESSAGES</code></td>
+<td>Disjoint (exactly one type per message)</td>
+</tr>
+</tbody>
+</table>
+<pre class="mermaid" style="all: unset;">erDiagram
+    CONVERSATIONS {
+        int   conversation_id PK
+        enum  conversation_type
+        varchar name
+        int   created_by FK
+        timestamp created_at
+    }
+
+    PRIVATE_CONVERSATIONS {
+        int conversation_id PK
+        int member_one FK
+        int member_two FK
+    }
+
+    GROUP_CONVERSATIONS {
+        int     conversation_id PK
+        varchar group_name
+        int     admin_user_id FK
+    }
+
+    MESSAGES {
+        bigint  message_id PK
+        int     conversation_id FK
+        int     sender_id FK
+        enum    message_type
+        boolean is_deleted
+        timestamp created_at
+    }
+
+    TEXT_MESSAGES {
+        bigint message_id PK
+        text   encrypted_content
+    }
+
+    ATTACHMENT_MESSAGES {
+        bigint  message_id PK
+        varchar file_url
+        enum    attachment_type
+    }
+
+    SYSTEM_MESSAGES {
+        bigint  message_id PK
+        varchar event_description
+    }
+
+    USERS {
+        int   user_id PK
+        varchar username
+        varchar email
+        text  ecdh_public_key
+        text  encrypted_private_key
+        timestamp created_at
+    }
+
+    MESSAGE_KEYS {
+        bigint message_id PK
+        int    user_id PK
+        text   encrypted_key
+    }
+
+    USER_BLOCKS {
+        int   blocker_id PK
+        int   blocked_id PK
+        timestamp created_at
+    }
+
+    CONVERSATION_MEMBERS {
+        int   conversation_id PK
+        int   user_id PK
+        enum  member_role
+        timestamp joined_at
+        bigint last_read_message_id FK
+    }
+
+    CONVERSATIONS ||--o| PRIVATE_CONVERSATIONS : "specializes disjoint"
+    CONVERSATIONS ||--o| GROUP_CONVERSATIONS : "specializes disjoint"
+    MESSAGES ||--o| TEXT_MESSAGES : "specializes"
+    MESSAGES ||--o| ATTACHMENT_MESSAGES : "specializes"
+    MESSAGES ||--o| SYSTEM_MESSAGES : "specializes"
+    USERS ||--o{ CONVERSATIONS : "creates"
+    USERS ||--o{ MESSAGES : "sends"
+    USERS ||--o{ CONVERSATION_MEMBERS : "is member of"
+    USERS ||--o{ MESSAGE_KEYS : "holds key"
+    USERS ||--o{ USER_BLOCKS : "blocks"
+    CONVERSATIONS ||--o{ CONVERSATION_MEMBERS : "has members"
+    CONVERSATIONS ||--o{ MESSAGES : "contains"
+    MESSAGES ||--o{ MESSAGE_KEYS : "has encrypted key"
+    MESSAGES |o--o| MESSAGES : "replies to"</pre>
+<hr>
+<h2 id="6-tables-and-queries">6. Tables and Queries</h2>
+<h3 id="61-table-definitions-sql"><strong>6.1 Table Definitions (SQL)</strong></h3>
+<pre><code class="language-sql"><span class="hljs-keyword">CREATE</span> DATABASE IF <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">EXISTS</span> chat_app
+  <span class="hljs-type">CHARACTER</span> <span class="hljs-keyword">SET</span> utf8mb4 <span class="hljs-keyword">COLLATE</span> utf8mb4_0900_ai_ci;
+USE chat_app;
+
+<span class="hljs-comment">-- 1. USERS</span>
+<span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> users (
+    user_id <span class="hljs-type">INT</span> UNSIGNED AUTO_INCREMENT <span class="hljs-keyword">PRIMARY</span> KEY,
+    username <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">30</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,
+    email <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">255</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,
+    password_hash <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">255</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,
+    display_name <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">100</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,
+    avatar_url <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">500</span>) <span class="hljs-keyword">DEFAULT</span> <span class="hljs-keyword">NULL</span>,
+    bio <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">255</span>) <span class="hljs-keyword">DEFAULT</span> <span class="hljs-keyword">NULL</span>,
+    status ENUM(<span class="hljs-string">&#x27;offline&#x27;</span>,<span class="hljs-string">&#x27;online&#x27;</span>,<span class="hljs-string">&#x27;away&#x27;</span>,<span class="hljs-string">&#x27;busy&#x27;</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-string">&#x27;offline&#x27;</span>,
+    last_seen_at DATETIME <span class="hljs-keyword">DEFAULT</span> <span class="hljs-keyword">NULL</span>,
+    ecdh_public_key TEXT <span class="hljs-keyword">DEFAULT</span> <span class="hljs-keyword">NULL</span>,
+    encrypted_private_key TEXT <span class="hljs-keyword">DEFAULT</span> <span class="hljs-keyword">NULL</span>,
+    created_at <span class="hljs-type">TIMESTAMP</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-built_in">CURRENT_TIMESTAMP</span>,
+    updated_at <span class="hljs-type">TIMESTAMP</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-built_in">CURRENT_TIMESTAMP</span> <span class="hljs-keyword">ON</span> <span class="hljs-keyword">UPDATE</span> <span class="hljs-built_in">CURRENT_TIMESTAMP</span>,
+    <span class="hljs-keyword">UNIQUE</span> KEY uq_users_username (username),
+    <span class="hljs-keyword">UNIQUE</span> KEY uq_users_email (email)
+) ENGINE<span class="hljs-operator">=</span>InnoDB;
+
+<span class="hljs-comment">-- 2. CONVERSATIONS</span>
+<span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> conversations (
+    conversation_id <span class="hljs-type">INT</span> UNSIGNED AUTO_INCREMENT <span class="hljs-keyword">PRIMARY</span> KEY,
+    conversation_type ENUM(<span class="hljs-string">&#x27;private&#x27;</span>,<span class="hljs-string">&#x27;group&#x27;</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,
+    name <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">100</span>) <span class="hljs-keyword">DEFAULT</span> <span class="hljs-keyword">NULL</span>,
+    created_by <span class="hljs-type">INT</span> UNSIGNED <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,
+    created_at <span class="hljs-type">TIMESTAMP</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-built_in">CURRENT_TIMESTAMP</span>,
+    updated_at <span class="hljs-type">TIMESTAMP</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-built_in">CURRENT_TIMESTAMP</span> <span class="hljs-keyword">ON</span> <span class="hljs-keyword">UPDATE</span> <span class="hljs-built_in">CURRENT_TIMESTAMP</span>,
+    <span class="hljs-keyword">CONSTRAINT</span> fk_conversations_created_by
+        <span class="hljs-keyword">FOREIGN</span> KEY (created_by) <span class="hljs-keyword">REFERENCES</span> users(user_id)
+        <span class="hljs-keyword">ON</span> <span class="hljs-keyword">DELETE</span> RESTRICT <span class="hljs-keyword">ON</span> <span class="hljs-keyword">UPDATE</span> CASCADE,
+    KEY idx_conversations_created_by (created_by),
+    KEY idx_conversations_type (conversation_type)
+) ENGINE<span class="hljs-operator">=</span>InnoDB;
+
+<span class="hljs-comment">-- 3. MESSAGES</span>
+<span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> messages (
+    message_id <span class="hljs-type">BIGINT</span> UNSIGNED AUTO_INCREMENT <span class="hljs-keyword">PRIMARY</span> KEY,
+    conversation_id <span class="hljs-type">INT</span> UNSIGNED <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,
+    sender_id <span class="hljs-type">INT</span> UNSIGNED <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,
+    message_type ENUM(<span class="hljs-string">&#x27;text&#x27;</span>,<span class="hljs-string">&#x27;image&#x27;</span>,<span class="hljs-string">&#x27;file&#x27;</span>,<span class="hljs-string">&#x27;system&#x27;</span>,<span class="hljs-string">&#x27;audio&#x27;</span>,<span class="hljs-string">&#x27;voice&#x27;</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-string">&#x27;text&#x27;</span>,
+    content TEXT <span class="hljs-keyword">DEFAULT</span> <span class="hljs-keyword">NULL</span>,
+    file_url <span class="hljs-type">VARCHAR</span>(<span class="hljs-number">500</span>) <span class="hljs-keyword">DEFAULT</span> <span class="hljs-keyword">NULL</span>,
+    reply_to_message_id <span class="hljs-type">BIGINT</span> UNSIGNED <span class="hljs-keyword">DEFAULT</span> <span class="hljs-keyword">NULL</span>,
+    is_deleted <span class="hljs-type">BOOLEAN</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-literal">FALSE</span>,
+    created_at <span class="hljs-type">TIMESTAMP</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-built_in">CURRENT_TIMESTAMP</span>,
+    updated_at <span class="hljs-type">TIMESTAMP</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-built_in">CURRENT_TIMESTAMP</span> <span class="hljs-keyword">ON</span> <span class="hljs-keyword">UPDATE</span> <span class="hljs-built_in">CURRENT_TIMESTAMP</span>,
+    <span class="hljs-keyword">CONSTRAINT</span> fk_messages_conversation
+        <span class="hljs-keyword">FOREIGN</span> KEY (conversation_id) <span class="hljs-keyword">REFERENCES</span> conversations(conversation_id)
+        <span class="hljs-keyword">ON</span> <span class="hljs-keyword">DELETE</span> CASCADE <span class="hljs-keyword">ON</span> <span class="hljs-keyword">UPDATE</span> CASCADE,
+    <span class="hljs-keyword">CONSTRAINT</span> fk_messages_sender
+        <span class="hljs-keyword">FOREIGN</span> KEY (sender_id) <span class="hljs-keyword">REFERENCES</span> users(user_id)
+        <span class="hljs-keyword">ON</span> <span class="hljs-keyword">DELETE</span> RESTRICT <span class="hljs-keyword">ON</span> <span class="hljs-keyword">UPDATE</span> CASCADE,
+    <span class="hljs-keyword">CONSTRAINT</span> fk_messages_reply
+        <span class="hljs-keyword">FOREIGN</span> KEY (reply_to_message_id) <span class="hljs-keyword">REFERENCES</span> messages(message_id)
+        <span class="hljs-keyword">ON</span> <span class="hljs-keyword">DELETE</span> <span class="hljs-keyword">SET</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">ON</span> <span class="hljs-keyword">UPDATE</span> CASCADE,
+    KEY idx_messages_conversation_time (conversation_id, created_at),
+    KEY idx_messages_sender (sender_id)
+) ENGINE<span class="hljs-operator">=</span>InnoDB;
+
+<span class="hljs-comment">-- 4. CONVERSATION_MEMBERS</span>
+<span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> conversation_members (
+    conversation_id <span class="hljs-type">INT</span> UNSIGNED <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,
+    user_id <span class="hljs-type">INT</span> UNSIGNED <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,
+    member_role ENUM(<span class="hljs-string">&#x27;member&#x27;</span>,<span class="hljs-string">&#x27;admin&#x27;</span>) <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-string">&#x27;member&#x27;</span>,
+    joined_at <span class="hljs-type">TIMESTAMP</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-built_in">CURRENT_TIMESTAMP</span>,
+    muted_until DATETIME <span class="hljs-keyword">DEFAULT</span> <span class="hljs-keyword">NULL</span>,
+    last_read_message_id <span class="hljs-type">BIGINT</span> UNSIGNED <span class="hljs-keyword">DEFAULT</span> <span class="hljs-keyword">NULL</span>,
+    <span class="hljs-keyword">PRIMARY</span> KEY (conversation_id, user_id),
+    <span class="hljs-keyword">CONSTRAINT</span> fk_cm_conversation
+        <span class="hljs-keyword">FOREIGN</span> KEY (conversation_id) <span class="hljs-keyword">REFERENCES</span> conversations(conversation_id)
+        <span class="hljs-keyword">ON</span> <span class="hljs-keyword">DELETE</span> CASCADE <span class="hljs-keyword">ON</span> <span class="hljs-keyword">UPDATE</span> CASCADE,
+    <span class="hljs-keyword">CONSTRAINT</span> fk_cm_user
+        <span class="hljs-keyword">FOREIGN</span> KEY (user_id) <span class="hljs-keyword">REFERENCES</span> users(user_id)
+        <span class="hljs-keyword">ON</span> <span class="hljs-keyword">DELETE</span> CASCADE <span class="hljs-keyword">ON</span> <span class="hljs-keyword">UPDATE</span> CASCADE,
+    <span class="hljs-keyword">CONSTRAINT</span> fk_cm_last_read_message
+        <span class="hljs-keyword">FOREIGN</span> KEY (last_read_message_id) <span class="hljs-keyword">REFERENCES</span> messages(message_id)
+        <span class="hljs-keyword">ON</span> <span class="hljs-keyword">DELETE</span> <span class="hljs-keyword">SET</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">ON</span> <span class="hljs-keyword">UPDATE</span> CASCADE,
+    KEY idx_cm_user (user_id)
+) ENGINE<span class="hljs-operator">=</span>InnoDB;
+
+<span class="hljs-comment">-- 5. USER_BLOCKS</span>
+<span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> user_blocks (
+    blocker_id <span class="hljs-type">INT</span> UNSIGNED <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,
+    blocked_id <span class="hljs-type">INT</span> UNSIGNED <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,
+    created_at <span class="hljs-type">TIMESTAMP</span> <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span> <span class="hljs-keyword">DEFAULT</span> <span class="hljs-built_in">CURRENT_TIMESTAMP</span>,
+    <span class="hljs-keyword">PRIMARY</span> KEY (blocker_id, blocked_id),
+    <span class="hljs-keyword">CONSTRAINT</span> fk_blocks_blocker
+        <span class="hljs-keyword">FOREIGN</span> KEY (blocker_id) <span class="hljs-keyword">REFERENCES</span> users(user_id)
+        <span class="hljs-keyword">ON</span> <span class="hljs-keyword">DELETE</span> CASCADE <span class="hljs-keyword">ON</span> <span class="hljs-keyword">UPDATE</span> CASCADE,
+    <span class="hljs-keyword">CONSTRAINT</span> fk_blocks_blocked
+        <span class="hljs-keyword">FOREIGN</span> KEY (blocked_id) <span class="hljs-keyword">REFERENCES</span> users(user_id)
+        <span class="hljs-keyword">ON</span> <span class="hljs-keyword">DELETE</span> CASCADE <span class="hljs-keyword">ON</span> <span class="hljs-keyword">UPDATE</span> CASCADE,
+    KEY idx_blocks_blocked (blocked_id)
+) ENGINE<span class="hljs-operator">=</span>InnoDB;
+
+<span class="hljs-comment">-- 6. MESSAGE_KEYS (E2EE Key Distribution)</span>
+<span class="hljs-keyword">CREATE</span> <span class="hljs-keyword">TABLE</span> IF <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">EXISTS</span> message_keys (
+    message_id <span class="hljs-type">BIGINT</span> UNSIGNED <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,
+    user_id <span class="hljs-type">INT</span> UNSIGNED <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,
+    encrypted_key TEXT <span class="hljs-keyword">NOT</span> <span class="hljs-keyword">NULL</span>,
+    <span class="hljs-keyword">PRIMARY</span> KEY (message_id, user_id),
+    <span class="hljs-keyword">CONSTRAINT</span> fk_mk_message
+        <span class="hljs-keyword">FOREIGN</span> KEY (message_id) <span class="hljs-keyword">REFERENCES</span> messages(message_id)
+        <span class="hljs-keyword">ON</span> <span class="hljs-keyword">DELETE</span> CASCADE <span class="hljs-keyword">ON</span> <span class="hljs-keyword">UPDATE</span> CASCADE,
+    <span class="hljs-keyword">CONSTRAINT</span> fk_mk_user
+        <span class="hljs-keyword">FOREIGN</span> KEY (user_id) <span class="hljs-keyword">REFERENCES</span> users(user_id)
+        <span class="hljs-keyword">ON</span> <span class="hljs-keyword">DELETE</span> CASCADE <span class="hljs-keyword">ON</span> <span class="hljs-keyword">UPDATE</span> CASCADE
+) ENGINE<span class="hljs-operator">=</span>InnoDB;
+</code></pre>
+<hr>
+<h3 id="62-all-database-queries"><strong>6.2 All Database Queries</strong></h3>
+<h4 id="authentication-authjs"><strong>Authentication (<code>auth.js</code>)</strong></h4>
+<p><strong>Q1 — Register user with E2EE credentials:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> users (username, email, password_hash, display_name, ecdh_public_key, encrypted_private_key)
+<span class="hljs-keyword">VALUES</span> (?, ?, ?, ?, ?, ?);
+</code></pre>
+<p><strong>Q2 — Search users:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">SELECT</span> user_id, username, display_name, avatar_url, bio, status
+<span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> username <span class="hljs-keyword">LIKE</span> ? <span class="hljs-keyword">OR</span> display_name <span class="hljs-keyword">LIKE</span> ?;
+</code></pre>
+<hr>
+<h4 id="user-profile--moderation-usersjs"><strong>User Profile &amp; Moderation (<code>users.js</code>)</strong></h4>
+<p><strong>Q3 — Block a user:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> user_blocks (blocker_id, blocked_id) <span class="hljs-keyword">VALUES</span> (?, ?);
+</code></pre>
+<p><strong>Q4 — Unblock a user:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">DELETE</span> <span class="hljs-keyword">FROM</span> user_blocks <span class="hljs-keyword">WHERE</span> blocker_id <span class="hljs-operator">=</span> ? <span class="hljs-keyword">AND</span> blocked_id <span class="hljs-operator">=</span> ?;
+</code></pre>
+<p><strong>Q5 — Get all blocked users:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">SELECT</span> blocked_id <span class="hljs-keyword">FROM</span> user_blocks <span class="hljs-keyword">WHERE</span> blocker_id <span class="hljs-operator">=</span> ?;
+</code></pre>
+<p><strong>Q6 — Check if block exists (either direction):</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">SELECT</span> <span class="hljs-operator">*</span> <span class="hljs-keyword">FROM</span> user_blocks
+<span class="hljs-keyword">WHERE</span> (blocker_id <span class="hljs-operator">=</span> ? <span class="hljs-keyword">AND</span> blocked_id <span class="hljs-operator">=</span> ?) <span class="hljs-keyword">OR</span> (blocker_id <span class="hljs-operator">=</span> ? <span class="hljs-keyword">AND</span> blocked_id <span class="hljs-operator">=</span> ?);
+</code></pre>
+<p><strong>Q7 — Fetch user profile:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">SELECT</span> user_id, username, email, display_name, avatar_url, bio, status, last_seen_at
+<span class="hljs-keyword">FROM</span> users <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> ?;
+</code></pre>
+<p><strong>Q8 — Update display name and bio:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">UPDATE</span> users <span class="hljs-keyword">SET</span> display_name <span class="hljs-operator">=</span> ?, bio <span class="hljs-operator">=</span> ? <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> ?;
+</code></pre>
+<p><strong>Q9 — Update avatar URL:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">UPDATE</span> users <span class="hljs-keyword">SET</span> avatar_url <span class="hljs-operator">=</span> ? <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> ?;
+</code></pre>
+<hr>
+<h4 id="chat--messaging-chatjs"><strong>Chat &amp; Messaging (<code>chat.js</code>)</strong></h4>
+<p><strong>Q10 — Fetch conversations with last message and unread count:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">SELECT</span>
+    c.conversation_id, c.conversation_type, c.name, c.updated_at,
+    (<span class="hljs-keyword">SELECT</span> u.display_name <span class="hljs-keyword">FROM</span> users u
+     <span class="hljs-keyword">JOIN</span> conversation_members cm2 <span class="hljs-keyword">ON</span> u.user_id <span class="hljs-operator">=</span> cm2.user_id
+     <span class="hljs-keyword">WHERE</span> cm2.conversation_id <span class="hljs-operator">=</span> c.conversation_id <span class="hljs-keyword">AND</span> cm2.user_id <span class="hljs-operator">!=</span> ? LIMIT <span class="hljs-number">1</span>) <span class="hljs-keyword">AS</span> other_user_name,
+    (<span class="hljs-keyword">SELECT</span> m.content <span class="hljs-keyword">FROM</span> messages m
+     <span class="hljs-keyword">WHERE</span> m.conversation_id <span class="hljs-operator">=</span> c.conversation_id <span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> m.created_at <span class="hljs-keyword">DESC</span> LIMIT <span class="hljs-number">1</span>) <span class="hljs-keyword">AS</span> last_message_content,
+    (<span class="hljs-keyword">SELECT</span> m.message_type <span class="hljs-keyword">FROM</span> messages m
+     <span class="hljs-keyword">WHERE</span> m.conversation_id <span class="hljs-operator">=</span> c.conversation_id <span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> m.created_at <span class="hljs-keyword">DESC</span> LIMIT <span class="hljs-number">1</span>) <span class="hljs-keyword">AS</span> last_message_type,
+    (<span class="hljs-keyword">SELECT</span> m.is_deleted <span class="hljs-keyword">FROM</span> messages m
+     <span class="hljs-keyword">WHERE</span> m.conversation_id <span class="hljs-operator">=</span> c.conversation_id <span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> m.created_at <span class="hljs-keyword">DESC</span> LIMIT <span class="hljs-number">1</span>) <span class="hljs-keyword">AS</span> last_message_deleted,
+    (<span class="hljs-keyword">SELECT</span> <span class="hljs-built_in">COUNT</span>(<span class="hljs-operator">*</span>) <span class="hljs-keyword">FROM</span> messages m
+     <span class="hljs-keyword">WHERE</span> m.conversation_id <span class="hljs-operator">=</span> c.conversation_id
+       <span class="hljs-keyword">AND</span> m.message_id <span class="hljs-operator">&gt;</span> IFNULL(cm.last_read_message_id, <span class="hljs-number">0</span>)
+       <span class="hljs-keyword">AND</span> m.sender_id <span class="hljs-operator">!=</span> ?) <span class="hljs-keyword">AS</span> unread_count
+<span class="hljs-keyword">FROM</span> conversations c
+<span class="hljs-keyword">JOIN</span> conversation_members cm <span class="hljs-keyword">ON</span> c.conversation_id <span class="hljs-operator">=</span> cm.conversation_id
+<span class="hljs-keyword">WHERE</span> cm.user_id <span class="hljs-operator">=</span> ?
+<span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> c.updated_at <span class="hljs-keyword">DESC</span>;
+</code></pre>
+<p><strong>Q11 — Get all members and ECDH public keys (for key exchange):</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">SELECT</span> u.user_id, u.username, u.ecdh_public_key
+<span class="hljs-keyword">FROM</span> conversation_members cm
+<span class="hljs-keyword">JOIN</span> users u <span class="hljs-keyword">ON</span> cm.user_id <span class="hljs-operator">=</span> u.user_id
+<span class="hljs-keyword">WHERE</span> cm.conversation_id <span class="hljs-operator">=</span> ?;
+</code></pre>
+<p><strong>Q12 — Find existing private conversation between two users:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">SELECT</span> c.conversation_id <span class="hljs-keyword">FROM</span> conversations c
+<span class="hljs-keyword">JOIN</span> conversation_members cm1 <span class="hljs-keyword">ON</span> c.conversation_id <span class="hljs-operator">=</span> cm1.conversation_id <span class="hljs-keyword">AND</span> cm1.user_id <span class="hljs-operator">=</span> ?
+<span class="hljs-keyword">JOIN</span> conversation_members cm2 <span class="hljs-keyword">ON</span> c.conversation_id <span class="hljs-operator">=</span> cm2.conversation_id <span class="hljs-keyword">AND</span> cm2.user_id <span class="hljs-operator">=</span> ?
+<span class="hljs-keyword">WHERE</span> c.conversation_type <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;private&#x27;</span>;
+</code></pre>
+<p><strong>Q13 — Add members to a group:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> conversation_members (conversation_id, user_id, member_role) <span class="hljs-keyword">VALUES</span> ?;
+</code></pre>
+<p><strong>Q14 — Fetch full message history with E2EE keys and reply context:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">SELECT</span> m.<span class="hljs-operator">*</span>, u.username, u.display_name,
+       rm.content <span class="hljs-keyword">AS</span> reply_content, rm.message_type <span class="hljs-keyword">AS</span> reply_type,
+       ru.display_name <span class="hljs-keyword">AS</span> reply_display_name,
+       mk.encrypted_key,
+       sender.ecdh_public_key <span class="hljs-keyword">AS</span> sender_ecdh_public_key
+<span class="hljs-keyword">FROM</span> messages m
+<span class="hljs-keyword">JOIN</span> users u <span class="hljs-keyword">ON</span> m.sender_id <span class="hljs-operator">=</span> u.user_id
+<span class="hljs-keyword">LEFT</span> <span class="hljs-keyword">JOIN</span> messages rm <span class="hljs-keyword">ON</span> m.reply_to_message_id <span class="hljs-operator">=</span> rm.message_id
+<span class="hljs-keyword">LEFT</span> <span class="hljs-keyword">JOIN</span> users ru <span class="hljs-keyword">ON</span> rm.sender_id <span class="hljs-operator">=</span> ru.user_id
+<span class="hljs-keyword">LEFT</span> <span class="hljs-keyword">JOIN</span> message_keys mk <span class="hljs-keyword">ON</span> m.message_id <span class="hljs-operator">=</span> mk.message_id <span class="hljs-keyword">AND</span> mk.user_id <span class="hljs-operator">=</span> ?
+<span class="hljs-keyword">LEFT</span> <span class="hljs-keyword">JOIN</span> users sender <span class="hljs-keyword">ON</span> m.sender_id <span class="hljs-operator">=</span> sender.user_id
+<span class="hljs-keyword">WHERE</span> m.conversation_id <span class="hljs-operator">=</span> ?
+<span class="hljs-keyword">ORDER</span> <span class="hljs-keyword">BY</span> m.created_at <span class="hljs-keyword">ASC</span>;
+</code></pre>
+<p><strong>Q15 — Mark messages as read:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">UPDATE</span> conversation_members
+<span class="hljs-keyword">SET</span> last_read_message_id <span class="hljs-operator">=</span> (<span class="hljs-keyword">SELECT</span> <span class="hljs-built_in">MAX</span>(message_id) <span class="hljs-keyword">FROM</span> messages <span class="hljs-keyword">WHERE</span> conversation_id <span class="hljs-operator">=</span> ?)
+<span class="hljs-keyword">WHERE</span> conversation_id <span class="hljs-operator">=</span> ? <span class="hljs-keyword">AND</span> user_id <span class="hljs-operator">=</span> ?;
+</code></pre>
+<p><strong>Q16 — Edit a message:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">UPDATE</span> messages <span class="hljs-keyword">SET</span> content <span class="hljs-operator">=</span> ?, updated_at <span class="hljs-operator">=</span> NOW()
+<span class="hljs-keyword">WHERE</span> message_id <span class="hljs-operator">=</span> ? <span class="hljs-keyword">AND</span> sender_id <span class="hljs-operator">=</span> ?;
+</code></pre>
+<p><strong>Q17 — Soft-delete a message:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">UPDATE</span> messages <span class="hljs-keyword">SET</span> is_deleted <span class="hljs-operator">=</span> <span class="hljs-literal">TRUE</span>, content <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;[DELETED]&#x27;</span>
+<span class="hljs-keyword">WHERE</span> message_id <span class="hljs-operator">=</span> ? <span class="hljs-keyword">AND</span> sender_id <span class="hljs-operator">=</span> ?;
+</code></pre>
+<p><strong>Q18 — Store encrypted session keys for all recipients:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> message_keys (message_id, user_id, encrypted_key) <span class="hljs-keyword">VALUES</span> ?;
+</code></pre>
+<hr>
+<h4 id="websocket-presence-serverjs"><strong>WebSocket Presence (<code>server.js</code>)</strong></h4>
+<p><strong>Q19 — Mark user online:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">UPDATE</span> users <span class="hljs-keyword">SET</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;online&#x27;</span> <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> ?;
+</code></pre>
+<p><strong>Q20 — Mark user offline and record last seen:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">UPDATE</span> users <span class="hljs-keyword">SET</span> status <span class="hljs-operator">=</span> <span class="hljs-string">&#x27;offline&#x27;</span>, last_seen_at <span class="hljs-operator">=</span> NOW() <span class="hljs-keyword">WHERE</span> user_id <span class="hljs-operator">=</span> ?;
+</code></pre>
+<hr>
+<h4 id="setup--migration-setupjs--migratejs"><strong>Setup &amp; Migration (<code>setup.js</code> &amp; <code>migrate.js</code>)</strong></h4>
+<p><strong>Q21 — Add E2EE columns (migration):</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> users <span class="hljs-keyword">ADD</span> <span class="hljs-keyword">COLUMN</span> ecdh_public_key TEXT <span class="hljs-keyword">DEFAULT</span> <span class="hljs-keyword">NULL</span>;
+<span class="hljs-keyword">ALTER</span> <span class="hljs-keyword">TABLE</span> users <span class="hljs-keyword">ADD</span> <span class="hljs-keyword">COLUMN</span> encrypted_private_key TEXT <span class="hljs-keyword">DEFAULT</span> <span class="hljs-keyword">NULL</span>;
+</code></pre>
+<p><strong>Q22 — Seed test accounts:</strong></p>
+<pre><code class="language-sql"><span class="hljs-keyword">INSERT</span> <span class="hljs-keyword">INTO</span> users (username, email, password_hash, display_name, bio) <span class="hljs-keyword">VALUES</span>
+(<span class="hljs-string">&#x27;neo&#x27;</span>, <span class="hljs-string">&#x27;neo@matrix.com&#x27;</span>, ?, <span class="hljs-string">&#x27;Neo&#x27;</span>, <span class="hljs-string">&#x27;The One&#x27;</span>),
+(<span class="hljs-string">&#x27;morpheus&#x27;</span>, <span class="hljs-string">&#x27;morpheus@matrix.com&#x27;</span>, ?, <span class="hljs-string">&#x27;Morpheus&#x27;</span>, <span class="hljs-string">&#x27;Nebuchadnezzar Captain&#x27;</span>),
+(<span class="hljs-string">&#x27;trinity&#x27;</span>, <span class="hljs-string">&#x27;trinity@matrix.com&#x27;</span>, ?, <span class="hljs-string">&#x27;Trinity&#x27;</span>, <span class="hljs-string">&#x27;First Mate&#x27;</span>);
+</code></pre>
+<hr>
+<h2 id="7-summary">7. Summary</h2>
+<p><strong>CipherChat</strong> is a production-grade, real-time secure messaging platform demonstrating that a zero-knowledge server architecture is achievable in a standard Node.js + MySQL full-stack setup.</p>
+<ul>
+<li><strong>E2EE:</strong> All message encryption/decryption happens entirely in the browser. The server stores only ciphertext and encrypted keys it cannot read.</li>
+<li><strong>Authentication:</strong> JWT-based sessions with bcrypt password hashing ensure secure login without exposing credentials.</li>
+<li><strong>Key Exchange:</strong> ECDH P-256 lets two users derive a shared secret without ever transmitting it.</li>
+<li><strong>Encryption:</strong> AES-GCM 256-bit with unique session keys and IVs per message.</li>
+<li><strong>Database:</strong> 6-table normalized MySQL schema with composite indexes, foreign key constraints, soft deletes, and message threading.</li>
+<li><strong>Real-Time:</strong> <a href="http://Socket.io">Socket.io</a> with JWT-authenticated handshakes powers messaging, typing indicators, read receipts, and presence.</li>
+</ul>
+
+            
+            
+        </body>
+        </html>

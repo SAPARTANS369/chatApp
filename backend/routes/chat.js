@@ -55,6 +55,16 @@ router.get('/conversations', async (req, res) => {
                  JOIN conversation_members cm2 ON u.user_id = cm2.user_id 
                  WHERE cm2.conversation_id = c.conversation_id AND cm2.user_id != ? 
                  LIMIT 1) as other_user_name,
+                (SELECT u.user_id 
+                 FROM users u 
+                 JOIN conversation_members cm2 ON u.user_id = cm2.user_id 
+                 WHERE cm2.conversation_id = c.conversation_id AND cm2.user_id != ? 
+                 LIMIT 1) as other_user_id,
+                (SELECT u.avatar_url 
+                 FROM users u 
+                 JOIN conversation_members cm2 ON u.user_id = cm2.user_id 
+                 WHERE cm2.conversation_id = c.conversation_id AND cm2.user_id != ? 
+                 LIMIT 1) as other_user_avatar_url,
                 (SELECT m.content FROM messages m WHERE m.conversation_id = c.conversation_id ORDER BY m.created_at DESC LIMIT 1) as last_message_content,
                 (SELECT m.message_type FROM messages m WHERE m.conversation_id = c.conversation_id ORDER BY m.created_at DESC LIMIT 1) as last_message_type,
                 (SELECT m.is_deleted FROM messages m WHERE m.conversation_id = c.conversation_id ORDER BY m.created_at DESC LIMIT 1) as last_message_deleted,
@@ -67,7 +77,7 @@ router.get('/conversations', async (req, res) => {
             WHERE cm.user_id = ?
             ORDER BY c.updated_at DESC
         `;
-        const [conversations] = await pool.query(query, [req.user.userId, req.user.userId, req.user.userId]);
+        const [conversations] = await pool.query(query, [req.user.userId, req.user.userId, req.user.userId, req.user.userId, req.user.userId]);
         res.json(conversations);
     } catch (error) {
         console.error(error);
@@ -385,7 +395,7 @@ router.put('/messages/:id', async (req, res) => {
 // Soft delete message
 router.delete('/messages/:id', async (req, res) => {
     try {
-        await pool.query('UPDATE messages SET is_deleted = TRUE, content = "[DELETED]" WHERE message_id = ? AND sender_id = ?', [req.params.id, req.user.userId]);
+        await pool.query('UPDATE messages SET is_deleted = TRUE, content = "[DELETED]" WHERE message_id = ?', [req.params.id]);
         res.json({ message: 'Deleted' });
     } catch (error) {
         res.status(500).json({ error: 'Server error' });

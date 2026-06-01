@@ -48,7 +48,7 @@ const Avatar = ({ user, size = 48, onClick }) => {
 };
 
 // Dynamic E2EE Encrypted Media Component
-const EncryptedMedia = ({ msg, myPrivateKey, type }) => {
+const EncryptedMedia = ({ msg, myPrivateKey, type, onClick, style }) => {
     const [mediaUrl, setMediaUrl] = useState('');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(false);
@@ -97,7 +97,6 @@ const EncryptedMedia = ({ msg, myPrivateKey, type }) => {
 
         return () => {
             isMounted = false;
-            if (mediaUrl) URL.revokeObjectURL(mediaUrl);
         };
     }, [msg, myPrivateKey, type]);
 
@@ -109,7 +108,8 @@ const EncryptedMedia = ({ msg, myPrivateKey, type }) => {
             <img
                 src={mediaUrl}
                 alt="img"
-                style={{ maxWidth: '250px', maxHeight: '250px', border: 'var(--border-style)', borderRadius: 'var(--border-radius)', display: 'block', transition: 'transform 0.15s' }}
+                onClick={onClick ? () => onClick(mediaUrl) : undefined}
+                style={style || { maxWidth: '250px', maxHeight: '250px', border: 'var(--border-style)', borderRadius: 'var(--border-radius)', display: 'block', transition: 'transform 0.15s', cursor: onClick ? 'pointer' : 'default' }}
             />
         );
     } else if (type === 'audio' || type === 'voice') {
@@ -231,7 +231,11 @@ const Chat = () => {
         socketRef.current.on('receive_message', async (msg) => {
             if (msg.sender_id !== user.id) {
                 if (activeChatRef.current?.conversation_id === msg.conversation_id) {
-                    const decrypted = await decryptMessageList([msg], user.ecdhPrivateKey);
+                    const socketMsg = { ...msg };
+                    if (msg.encrypted_keys && msg.encrypted_keys[user.id]) {
+                        socketMsg.encrypted_key = msg.encrypted_keys[user.id];
+                    }
+                    const decrypted = await decryptMessageList([socketMsg], user.ecdhPrivateKey);
                     setMessages(prev => [...prev, ...decrypted]);
                     api.put(`/chat/conversations/${msg.conversation_id}/read`);
                 }
@@ -437,7 +441,10 @@ const Chat = () => {
             const r = await api.post(`/chat/conversations/${activeChat.conversation_id}/messages`, payload);
             const decrypted = await decryptMessageList([r.data], user.ecdhPrivateKey);
             setMessages(prev => [...prev, ...decrypted]);
-            socketRef.current.emit('send_message', r.data);
+            socketRef.current.emit('send_message', {
+                ...r.data,
+                encrypted_keys: payload.encrypted_keys || null
+            });
             setNewMessage('');
             setReplyTo(null);
             fetchConversations();
@@ -488,6 +495,7 @@ const Chat = () => {
         try {
             let finalFile = file;
             let encryptedKeysString = null;
+            let localEncryptedKeys = null;
             
             const myPrivateKey = user.ecdhPrivateKey;
             const eligibleKeys = activeChatKeys.filter(k => k.ecdh_public_key);
@@ -518,6 +526,7 @@ const Chat = () => {
                     const encryptedBlob = new Blob([combined], { type: 'application/octet-stream' });
                     finalFile = new File([encryptedBlob], `${file.name}.enc`, { type: 'application/octet-stream' });
                     encryptedKeysString = JSON.stringify(encryptedKeys);
+                    localEncryptedKeys = encryptedKeys;
                 } catch (err) {
                     console.error('File encryption failed, sending plaintext:', err);
                 }
@@ -535,7 +544,10 @@ const Chat = () => {
             );
             const decrypted = await decryptMessageList([r.data], user.ecdhPrivateKey);
             setMessages(prev => [...prev, ...decrypted]);
-            socketRef.current.emit('send_message', r.data);
+            socketRef.current.emit('send_message', {
+                ...r.data,
+                encrypted_keys: localEncryptedKeys
+            });
             setReplyTo(null);
             fetchConversations();
             addToast('Media sent successfully');
@@ -636,10 +648,10 @@ const Chat = () => {
                     </div>
                 )}
                 {/* Message content */}
-                {msg.is_deleted ? (
+                ) : msg.is_deleted ? (
                     <div style={{ color: 'var(--danger)', opacity: 0.6, fontStyle: 'italic' }}>[DELETED]</div>
                 ) : msg.is_encrypted_file ? (
-                    <EncryptedMedia msg={msg} myPrivateKey={user.ecdhPrivateKey} type={msgType} />
+                    <EncryptedMedia msg={msg} myPrivateKey={user.ecdhPrivateKey} type={msgType} onClick={(decryptedUrl) => setLightboxImage(decryptedUrl)} />
                 ) : msgType === 'image' ? (
                     <img
                         src={getFullUrl(msg.file_url)}
@@ -662,10 +674,8 @@ const Chat = () => {
                     {!msg.is_deleted && (
                         <span>
                             <span style={{ cursor: 'pointer', marginRight: '8px', opacity: 0.7 }} onClick={() => setReplyTo({ message_id: msg.message_id, display_name: msg.display_name, content: msg.content || '[attachment]' })}>[REPLY]</span>
-                            {isMine && <>
-                                {msgType === 'text' && <span style={{ cursor: 'pointer', marginRight: '8px', opacity: 0.7 }} onClick={() => { setEditingMsgId(msg.message_id); setNewMessage(msg.content); }}>[EDIT]</span>}
-                                <span style={{ cursor: 'pointer', color: 'var(--danger)', opacity: 0.8 }} onClick={() => deleteMessage(msg.message_id)}>[DEL]</span>
-                            </>}
+                            {msgType === 'text' && isMine && <span style={{ cursor: 'pointer', marginRight: '8px', opacity: 0.7 }} onClick={() => { setEditingMsgId(msg.message_id); setNewMessage(msg.content); }}>[EDIT]</span>}
+                            <span style={{ cursor: 'pointer', color: 'var(--danger)', opacity: 0.8 }} onClick={() => deleteMessage(msg.message_id)}>[DEL]</span>
                         </span>
                     )}
                 </div>
@@ -778,7 +788,7 @@ const Chat = () => {
                             {conversations.map(c => {
                                 const name = c.conversation_type === 'private' ? c.other_user_name : c.name;
                                 const preview = c.last_message_deleted ? '[DELETED]' : c.last_message_type !== 'text' ? `[${(c.last_message_type || 'file').toUpperCase()}]` : c.last_message_content || '-- open channel --';
-                                const otherUserAvatar = c.conversation_type === 'private' ? c.avatar_url : null;
+                                const otherUserAvatar = c.conversation_type === 'private' ? c.other_user_avatar_url : null;
                                 const itemUser = { display_name: name, avatar_url: otherUserAvatar };
 
                                 return (
@@ -841,15 +851,24 @@ const Chat = () => {
                                             ⬅ BACK
                                         </button>
                                     )}
-                                    <div style={{ marginRight: '1rem' }}>
-                                        <Avatar user={{
-                                            display_name: activeChat.conversation_type === 'private' ? activeChat.other_user_name : activeChat.name,
-                                            avatar_url: activeChat.avatar_url
-                                        }} size={48} />
-                                    </div>
-                                    <div>
-                                        <h3>{activeChat.conversation_type === 'private' ? activeChat.other_user_name : activeChat.name}</h3>
-                                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{activeChat.conversation_type === 'group' ? 'GROUP_CHANNEL' : 'PRIVATE_CHANNEL'}</span>
+                                    <div 
+                                        style={{ display: 'flex', alignItems: 'center', cursor: activeChat.conversation_type === 'private' ? 'pointer' : 'default' }}
+                                        onClick={() => {
+                                            if (activeChat.conversation_type === 'private' && activeChat.other_user_id) {
+                                                openUserProfile(activeChat.other_user_id);
+                                            }
+                                        }}
+                                    >
+                                        <div style={{ marginRight: '1rem' }}>
+                                            <Avatar user={{
+                                                display_name: activeChat.conversation_type === 'private' ? activeChat.other_user_name : activeChat.name,
+                                                avatar_url: activeChat.conversation_type === 'private' ? activeChat.other_user_avatar_url : activeChat.avatar_url
+                                            }} size={48} />
+                                        </div>
+                                        <div>
+                                            <h3>{activeChat.conversation_type === 'private' ? activeChat.other_user_name : activeChat.name}</h3>
+                                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{activeChat.conversation_type === 'group' ? 'GROUP_CHANNEL' : 'PRIVATE_CHANNEL'}</span>
+                                        </div>
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '4px' }}>
@@ -949,15 +968,29 @@ const Chat = () => {
                                                     <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>No images shared</span>
                                                 ) : (
                                                     <div className="gallery-grid">
-                                                        {imagesGallery.map((m, i) => (
-                                                            <div
-                                                                key={i}
-                                                                className="gallery-thumb"
-                                                                onClick={() => setLightboxImage(getFullUrl(m.file_url))}
-                                                            >
-                                                                <img src={getFullUrl(m.file_url)} alt="gallery-thumb" />
-                                                            </div>
-                                                        ))}
+                                                        {imagesGallery.map((m, i) => {
+                                                            const isEncrypted = m.file_url && m.file_url.endsWith('.enc');
+                                                            return (
+                                                                <div key={i} className="gallery-thumb">
+                                                                    {isEncrypted ? (
+                                                                        <EncryptedMedia
+                                                                            msg={m}
+                                                                            myPrivateKey={user.ecdhPrivateKey}
+                                                                            type="image"
+                                                                            onClick={(decryptedUrl) => setLightboxImage(decryptedUrl)}
+                                                                            style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'pointer' }}
+                                                                        />
+                                                                    ) : (
+                                                                        <img
+                                                                            src={getFullUrl(m.file_url)}
+                                                                            alt="gallery-thumb"
+                                                                            onClick={() => setLightboxImage(getFullUrl(m.file_url))}
+                                                                            style={{ cursor: 'pointer' }}
+                                                                        />
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
                                                 )}
                                             </div>
@@ -969,14 +1002,21 @@ const Chat = () => {
                                                     <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>No audio notes shared</span>
                                                 ) : (
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                                        {audioGallery.map((m, i) => (
-                                                            <div key={i} className="gallery-audio-item">
-                                                                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                                                                    {new Date(m.created_at).toLocaleDateString()} {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                                </span>
-                                                                <audio controls src={getFullUrl(m.file_url)} style={{ width: '100%', filter: 'invert(1) hue-rotate(90deg)' }} />
-                                                            </div>
-                                                        ))}
+                                                        {audioGallery.map((m, i) => {
+                                                            const isEncrypted = m.file_url && m.file_url.endsWith('.enc');
+                                                            return (
+                                                                <div key={i} className="gallery-audio-item">
+                                                                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                                                        {new Date(m.created_at).toLocaleDateString()} {new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                    </span>
+                                                                    {isEncrypted ? (
+                                                                        <EncryptedMedia msg={m} myPrivateKey={user.ecdhPrivateKey} type={m.message_type} />
+                                                                    ) : (
+                                                                        <audio controls src={getFullUrl(m.file_url)} style={{ width: '100%', filter: 'invert(1) hue-rotate(90deg)' }} />
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
                                                 )}
                                             </div>
@@ -988,17 +1028,24 @@ const Chat = () => {
                                                     <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>No documents shared</span>
                                                 ) : (
                                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                                        {docsGallery.map((m, i) => (
-                                                            <a
-                                                                key={i}
-                                                                href={getFullUrl(m.file_url)}
-                                                                target="_blank"
-                                                                rel="noreferrer"
-                                                                style={{ fontSize: '0.8rem', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                                                            >
-                                                                📄 {m.file_url?.split('/').pop()}
-                                                            </a>
-                                                        ))}
+                                                        {docsGallery.map((m, i) => {
+                                                            const isEncrypted = m.file_url && m.file_url.endsWith('.enc');
+                                                            return isEncrypted ? (
+                                                                <div key={i} style={{ fontSize: '0.8rem' }}>
+                                                                    <EncryptedMedia msg={m} myPrivateKey={user.ecdhPrivateKey} type="file" />
+                                                                </div>
+                                                            ) : (
+                                                                <a
+                                                                    key={i}
+                                                                    href={getFullUrl(m.file_url)}
+                                                                    target="_blank"
+                                                                    rel="noreferrer"
+                                                                    style={{ fontSize: '0.8rem', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                                                >
+                                                                    📄 {m.file_url?.split('/').pop()}
+                                                                </a>
+                                                            );
+                                                        })}
                                                     </div>
                                                 )}
                                             </div>
