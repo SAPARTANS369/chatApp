@@ -125,8 +125,9 @@ const EncryptedMedia = ({ msg, myPrivateKey, type, onClick, style }) => {
 
 // Decrypt message helper
 const decryptMessageList = async (messageList, myPrivateKey) => {
-    console.log('[DEBUG] decryptMessageList - messages count:', messageList.length, 'hasPrivateKey:', !!myPrivateKey);
-    if (!myPrivateKey) return messageList;
+    const key = myPrivateKey || sessionStorage.getItem('ecdh_private_key');
+    console.log('[DEBUG] decryptMessageList - messages count:', messageList.length, 'hasPrivateKey:', !!key);
+    if (!key) return messageList;
 
     const decryptedList = [];
     for (const msg of messageList) {
@@ -139,7 +140,7 @@ const decryptMessageList = async (messageList, myPrivateKey) => {
         });
         if (msg.content?.startsWith('__E2EE__:') && msg.encrypted_key && msg.sender_ecdh_public_key) {
             try {
-                const sharedKEK = await deriveECDHSharedKey(myPrivateKey, msg.sender_ecdh_public_key);
+                const sharedKEK = await deriveECDHSharedKey(key, msg.sender_ecdh_public_key);
                 const rawAesKey = await decryptAESKeyWithECDH(msg.encrypted_key, sharedKEK);
                 
                 const parts = msg.content.split(':');
@@ -315,7 +316,10 @@ const Chat = () => {
         });
 
         return () => {
-            if (socketRef.current) socketRef.current.disconnect();
+            if (socketRef.current) {
+                socketRef.current.off();
+                socketRef.current.disconnect();
+            }
         };
     }, [token, user.id]);
 
