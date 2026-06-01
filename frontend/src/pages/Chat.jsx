@@ -648,7 +648,7 @@ const Chat = () => {
                     </div>
                 )}
                 {/* Message content */}
-                ) : msg.is_deleted ? (
+                {msg.is_deleted ? (
                     <div style={{ color: 'var(--danger)', opacity: 0.6, fontStyle: 'italic' }}>[DELETED]</div>
                 ) : msg.is_encrypted_file ? (
                     <EncryptedMedia msg={msg} myPrivateKey={user.ecdhPrivateKey} type={msgType} onClick={(decryptedUrl) => setLightboxImage(decryptedUrl)} />
