@@ -125,10 +125,18 @@ const EncryptedMedia = ({ msg, myPrivateKey, type, onClick, style }) => {
 
 // Decrypt message helper
 const decryptMessageList = async (messageList, myPrivateKey) => {
+    console.log('[DEBUG] decryptMessageList - messages count:', messageList.length, 'hasPrivateKey:', !!myPrivateKey);
     if (!myPrivateKey) return messageList;
 
     const decryptedList = [];
     for (const msg of messageList) {
+        console.log('[DEBUG] decrypting msg_id:', msg.message_id, {
+            content: msg.content?.substring(0, 30),
+            hasEncryptedKey: !!msg.encrypted_key,
+            hasSenderPublicKey: !!msg.sender_ecdh_public_key,
+            encryptedKeyVal: msg.encrypted_key,
+            senderPublicKeyVal: msg.sender_ecdh_public_key
+        });
         if (msg.content?.startsWith('__E2EE__:') && msg.encrypted_key && msg.sender_ecdh_public_key) {
             try {
                 const sharedKEK = await deriveECDHSharedKey(myPrivateKey, msg.sender_ecdh_public_key);
@@ -147,9 +155,10 @@ const decryptMessageList = async (messageList, myPrivateKey) => {
                     content: plaintext,
                     is_decrypted: true
                 });
+                console.log('[DEBUG] Decrypted message plaintext successfully:', plaintext);
                 continue;
             } catch (e) {
-                console.error('Failed to decrypt message:', msg.message_id, e);
+                console.error('[DEBUG] Failed to decrypt message:', msg.message_id, e);
                 decryptedList.push({
                     ...msg,
                     content: '[Failed to decrypt secure message]',
@@ -229,21 +238,29 @@ const Chat = () => {
         socketRef.current = io(BASE_URL, { auth: { token } });
 
         socketRef.current.on('receive_message', async (msg) => {
+            console.log('[DEBUG] socket receive_message triggered:', msg);
             if (msg.sender_id !== user.id) {
                 if (activeChatRef.current?.conversation_id === msg.conversation_id) {
                     const socketMsg = { ...msg };
+                    console.log('[DEBUG] msg.encrypted_keys:', msg.encrypted_keys, 'user.id:', user.id, 'String(user.id):', String(user.id));
                     // encrypted_keys object keys are always strings — coerce user.id to match
                     const myKey = msg.encrypted_keys && (
                         msg.encrypted_keys[user.id] ||
                         msg.encrypted_keys[String(user.id)]
                     );
+                    console.log('[DEBUG] Found myKey:', myKey);
                     if (myKey) {
                         socketMsg.encrypted_key = myKey;
                     }
                     const decrypted = await decryptMessageList([socketMsg], user.ecdhPrivateKey);
+                    console.log('[DEBUG] Decrypted socketMsg output:', decrypted[0]);
                     setMessages(prev => [...prev, ...decrypted]);
                     api.put(`/chat/conversations/${msg.conversation_id}/read`);
+                } else {
+                    console.log('[DEBUG] activeChatRef mismatch. active:', activeChatRef.current?.conversation_id, 'msg:', msg.conversation_id);
                 }
+            } else {
+                console.log('[DEBUG] Sender is same as user, skipping socket addition.');
             }
             fetchConversations();
         });
