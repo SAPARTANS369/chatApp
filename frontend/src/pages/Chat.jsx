@@ -775,7 +775,7 @@ const Chat = () => {
                 <div className="sidebar glass">
                     <div className="sidebar-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '0.75rem' }}>
                         <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <h3>MATRIX_NET</h3>
+                            <h3>CIPHER_CHAT</h3>
                             {/* Theme Switcher */}
                             <div className="theme-switcher">
                                 <button className="theme-btn" onClick={() => setThemeDropdownOpen(!themeDropdownOpen)}>

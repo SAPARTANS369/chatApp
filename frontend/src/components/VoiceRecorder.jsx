@@ -108,25 +108,7 @@ const VoiceRecorder = ({ onRecorded, disabled }) => {
                     </span>
                 </>
             )}
-            <button
-                type="button"
-                title={recording ? 'Stop & send voice note' : 'Record voice note'}
-                disabled={disabled}
-                onClick={recording ? stopRecording : startRecording}
-                style={{
-                    background: recording ? 'var(--danger)' : 'transparent',
-                    color: recording ? 'black' : 'var(--primary)',
-                    border: `1px solid ${recording ? 'var(--danger)' : 'var(--primary)'}`,
-                    padding: '6px 10px',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    fontSize: '1rem',
-                    transition: 'all 0.2s',
-                    animation: recording ? 'voicePulse 1s infinite' : 'none',
-                }}
-            >
-                {recording ? '⏹' : '🎤'}
-            </button>
+
         </div>
     );
 };
