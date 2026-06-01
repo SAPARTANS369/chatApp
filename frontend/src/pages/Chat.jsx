@@ -232,8 +232,13 @@ const Chat = () => {
             if (msg.sender_id !== user.id) {
                 if (activeChatRef.current?.conversation_id === msg.conversation_id) {
                     const socketMsg = { ...msg };
-                    if (msg.encrypted_keys && msg.encrypted_keys[user.id]) {
-                        socketMsg.encrypted_key = msg.encrypted_keys[user.id];
+                    // encrypted_keys object keys are always strings — coerce user.id to match
+                    const myKey = msg.encrypted_keys && (
+                        msg.encrypted_keys[user.id] ||
+                        msg.encrypted_keys[String(user.id)]
+                    );
+                    if (myKey) {
+                        socketMsg.encrypted_key = myKey;
                     }
                     const decrypted = await decryptMessageList([socketMsg], user.ecdhPrivateKey);
                     setMessages(prev => [...prev, ...decrypted]);
